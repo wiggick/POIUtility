@@ -1,5 +1,5 @@
 # A fork of Ben's POI
-* Added Document attribute EvaluateFormulas
+* Added Document attribute EvaluateFormulas and final evaluate if true
 * Added Row check if row exists where it gets the row else create 
 
 
