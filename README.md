@@ -1,3 +1,7 @@
+# A fork of Ben's POI
+* Added Document attribute EvaluateFormulas
+* Added Row check if row exists where it gets the row else create 
+
 
 # Kinky Solutions POI ColdFusion Custom Tag
 
