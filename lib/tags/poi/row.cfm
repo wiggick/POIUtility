@@ -52,18 +52,20 @@
 			new index, we will keep the row index proper.
 		--->
 		<cfset VARIABLES.SheetTag.RowIndex = ATTRIBUTES.Index />
-			
-			
-		<!--- Create the new row. --->
+
+		<!--- Try Getting the  row. --->
+		<cfset VARIABLES.Row = Variables.SheetTag.Sheet.getRow( JavaCast( "int", (VARIABLES.SheetTag.RowIndex - 1) ) )>
+
+		<cfif ! StructKeyExists(Variables, "Row")>
 		<cfset VARIABLES.Row = VARIABLES.SheetTag.Sheet.CreateRow(
 			JavaCast( "int", (VARIABLES.SheetTag.RowIndex - 1) )
 			) />
-		
-			
-		<!--- 
-			Create a variable for the current cell index. There are hooks for 
-			this value into the Row object, but they seem to be buggy, so I 
-			am gonna run my own index to make sure that I really know what's 
+		</cfif>
+
+		<!---
+			Create a variable for the current cell index. There are hooks for
+			this value into the Row object, but they seem to be buggy, so I
+			am gonna run my own index to make sure that I really know what's
 			going on. This cell index holdes the INDEX OF THE CURRENT CELL.
 		--->
 		<cfset VARIABLES.CellIndex = 1 />
