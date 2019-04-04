@@ -1,8 +1,11 @@
-# A fork of Ben's POI
+# A fork of Ben's POI  
+* TODO Finish support for xls
+* Now Supports xlsx 
+* Revamped CSSRule.cfc to cfscript, added region support for rowSpan
+* Added support for Apache POI 4.0.1
+* Added  Mark Mandel's JavaLoader.cfc
 * Added Document attribute EvaluateFormulas and final evaluate if true
 * Added Row check if row exists where it gets the row else create 
-
-
 # Kinky Solutions POI ColdFusion Custom Tag
 
 by [Ben Nadel][1]
