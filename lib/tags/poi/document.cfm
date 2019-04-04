@@ -48,6 +48,15 @@
 			default=""
 			/>
 
+	  <!---
+			Set this to true to create XLSX files
+		--->
+		<cfparam
+			name="ATTRIBUTES.createXLSX"
+			type="boolean"
+			default="false"
+			/>
+
 		<!---
 			This will cause an evaluation of all formulas in the workbook
 		--->
@@ -56,6 +65,37 @@
 			type="boolean"
 			default="false"
 			/>
+		<cfset VARIABLES.poiPath =  GetDirectoryFromPath ( GetCurrentTemplatePath() )>
+		<cfset VARIABLES.loadPaths = ArrayNew(1)>
+
+
+		<cfif ATTRIBUTES.createXLSX>
+			<cfset VARIABLES.isXLSX = true>
+			<cfset VARIABLES.loadPaths[1] = replace( "#VARIABLES.poiPath#apache/poi-ooxml-4-0-1.jar","\","/","all")>
+			<cfset VARIABLES.loadPaths[2] = replace( "#VARIABLES.poiPath#apache/poi-4-0-1.jar","\","/","all")>
+			<cfset VARIABLES.loadPaths[3] = replace( "#VARIABLES.poiPath#apache/lib/commons-collections4-4.2.jar","\","/","all")>
+			<cfset VARIABLES.loadPaths[4] = replace( "#VARIABLES.poiPath#apache/xmlbeans-3.1.0/lib/xmlbeans-3.1.0.jar","\","/","all")>
+			<cfset VARIABLES.loadPaths[5] = replace( "#VARIABLES.poiPath#apache/poi-ooxml-schemas-4.0.1.jar","\","/","all")>
+			<cfset VARIABLES.loadPaths[6] = replace( "#VARIABLES.poiPath#apache/lib/commons-compress-1.18.jar","\","/","all")>
+
+			<cfset VARIABLES.workbookFactoryClass  ="org.apache.poi.ss.usermodel.WorkbookFactory">
+			<!---<cfset VARIABLES.workbookFactoryClass  ="org.apache.poi.xssf.usermodel.XSSFWorkbookFactory">--->
+			<cfset VARIABLES.workbookClass         = "org.apache.poi.xssf.usermodel.XSSFWorkbook">
+			<cfset VARIABLES.DataFormatClass       = "org.apache.poi.xssf.usermodel.XSSFDataFormat">
+			<cfset VARIABLES.formulaEvaluatorClass = "org.apache.poi.xssf.usermodel.XSSFFormulaEvaluator">
+			<cfset VARIABLES.cellRegionClass       = "org.apache.poi.ss.util.CellRangeAddress">
+		<cfelse>
+			<!--- TODO:  see if I can convert this to WorkBookFactory --->
+			<cfset VARIABLES.isXLSX = false>
+			<cfset VARIABLES.loadPaths[1] = replace( "#VARIABLES.poiPath#apachepoi/poi-4.0.1.jar","\","/","all")>
+			<cfset VARIABLES.colorClass            = "org.apache.poi.hssf.util.HSSFColor">">
+			<cfset VARIABLES.cellStyleClass        = "org.apache.poi.hssf.usermodel.HSSFCellStyle">
+			<cfset VARIABLES.workbookClass         = "org.apache.poi.hssf.usermodel.HSSFWorkbook">
+			<cfset VARIABLES.DataFormatClass       = "org.apache.poi.hssf.usermodel.HSSFDataFormat">
+			<cfset VARIABLES.formulaEvaluatorClass = "org.apache.poi.hssf.usermodel.HSSFFormulaEvaluator">
+			<cfset VARIABLES.cellRegionClass       = "org.apache.poi.hssf.util.Region">
+		</cfif>
+		
 
 		<!--- Make sure that we have the proper attributes. --->
 		<cfif NOT (
@@ -69,36 +109,38 @@
 				message="Invalid attributes on the Document tag."
 				detail="The DOCUMENT tag requires either a NAME and/or FILE attribute."
 				/>
-
 		</cfif>
 
+		<cfset VARIABLES.javaLoader = createObject("component", "javaloader.JavaLoader").init(VARIABLES.loadPaths) >
 
-		<!---
+		<cfset VARIABLES.WorkBookFactory = VARIABLES.javaLoader.create(  VARIABLES.workbookFactoryClass ).Init() />
+
+
+		
+		
+	
+			
+			<!---
 			Create the Excel workbook to which we will be writing. Check
 			to see if we are creating a totally new workbook, or if we want
 			to use an existing template.
-		--->
+			Use the generic method of WorkBookFactory to create the appropriate type of document--->
+		
 		<cfif Len( ATTRIBUTES.Template )>
 
 			<!--- Read in existing workbook. --->
-			<cfset VARIABLES.WorkBook = CreateObject( "java", "org.apache.poi.hssf.usermodel.HSSFWorkbook" ).Init(
-				CreateObject( "java", "java.io.FileInputStream" ).Init(
+			<cfset VARIABLES.WorkBook = VARIABLES.WorkBookFactory.Create( CreateObject( "java", "java.io.FileInputStream" ).Init(
 					JavaCast( "string", ATTRIBUTES.Template )
-					)
-				) />
-
+					) )>
 		<cfelse>
-
-			<!--- Create a new workbook. --->
-			<cfset VARIABLES.WorkBook = CreateObject( "java", "org.apache.poi.hssf.usermodel.HSSFWorkbook" ).Init() />
-
+			<cfset VARIABLES.WorkBook = VARIABLES.WorkBookFactory.Create( JavaCast( "boolean", VARIABLES.isXLSX ) )>
 		</cfif>
 
 		<!---
 			Create a data formatter utility object (we will need this to
 			get the formatting index later on when we set the cell styles).
 		--->
-		<cfset VARIABLES.DataFormat = CreateObject( "java", "org.apache.poi.hssf.usermodel.HSSFDataFormat" ) />
+		<cfset VARIABLES.DataFormat = VARIABLES.WorkBook.createDataFormat()>
 
 		<!--- Create an index of available number formats. --->
 		<cfset VARIABLES.NumberFormats = {} />
@@ -112,6 +154,7 @@
 		<cfset VARIABLES.NumberFormats[ "($##,####0.00);($##,####0.00)" ] = true />
 		<cfset VARIABLES.NumberFormats[ "($##,####0.00_);[Red]($##,####0.00)" ] = true />
 		<cfset VARIABLES.NumberFormats[ "0%" ] = true />
+		<cfset VARIABLES.NumberFormats[ "0.0%" ] = true />
 		<cfset VARIABLES.NumberFormats[ "0.00%" ] = true />
 		<cfset VARIABLES.NumberFormats[ "0.00E+00" ] = true />
 		<cfset VARIABLES.NumberFormats[ "## ?/?" ] = true />
@@ -144,8 +187,9 @@
 
 		<!---
 			Create an index for the column look up. We will need this when
-			defining the cell aliases in forumlas.
+			defining the cell aliases in formulas.
 		--->
+		<!--- TODO:  update to more the 26 columns --->
 		<cfset VARIABLES.ColumnLookup = ListToArray( "A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z" ) />
 
 		<!--- Create a structure for storing cell aliases. --->
@@ -156,7 +200,7 @@
 			Create a instance of the utiltiy object, CSSRule. This will be use used
 			by this tag and its child tags to parse CSS as well as manipulate it.
 		--->
-		<cfset VARIABLES.CSSRule = CreateObject( "component", "CSSRule" ).Init() />
+		<cfset VARIABLES.CSSRule = CreateObject( "component", "CSSRule" ).Init(javaLoader = VARIABLES.javaLoader, WorkBook = VARIABLES.WorkBook ) />
 
 		<!---
 			Create a struct to hold the CSS classes by name. These classes will be
@@ -194,7 +238,7 @@
 	<cfcase value="End">
 
 		<cfif ATTRIBUTES.EvaluateFormulas>
-			<cfset VARIABLES.formulaEvaluator = CreateObject( "java", "org.apache.poi.hssf.usermodel.HSSFFormulaEvaluator" ) />
+			<cfset VARIABLES.formulaEvaluator = VARIABLES.javaLoader.create("#VARIABLES.formulaEvaluatorClass#").init()>
 			<cfset VARIABLES.formulaEvaluator.evaluateAllFormulaCells(VARIABLES.WorkBook)>
 		</cfif>
 

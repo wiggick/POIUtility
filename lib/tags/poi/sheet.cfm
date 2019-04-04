@@ -65,6 +65,7 @@
 			sheet or if we need to create a new one. If we are using a template, 
 			then we should just be able to grab the existing sheet.
 		--->
+
 		<cfif (VARIABLES.DocumentTag.Workbook.GetNumberOfSheets() GTE VARIABLES.DocumentTag.SheetIndex)>
 		
 			<!--- We have an existing sheet to use. Grab it from the workbook. --->
@@ -121,6 +122,13 @@
 			going on. The row index is going to hold the index OF THE CURRENT ROW.
 		--->
 		<cfset VARIABLES.RowIndex = 1 />
+
+		<!--- Moving region information to be stored in the sheet colSpan and hopefully rowSpan
+			so that region merges can be added AFTER all the rows/cells have been created.  Then iterate
+			over the array and add the regions to the sheet.
+		--->
+		<cfset VARIABLES.regions = []>
+
 			
 	</cfcase>
 	
@@ -201,15 +209,24 @@
 				) />
 		
 		</cfif>
-		
-		
+		<!--- TODO: differences in method/overload --->
+
 		<!--- Set the sheet zoom. --->
-		<cfset VARIABLES.Sheet.SetZoom(
+		<!---<cfset VARIABLES.Sheet.SetZoom(
 			JavaCast( "int", VARIABLES.Zoom ),
 			JavaCast( "int", 100 )
+			) />--->
+
+		<cfset VARIABLES.Sheet.SetZoom(
+			JavaCast( "int", VARIABLES.Zoom )
 			) />
 		
-		
+		<cfif ArrayLen( VARIABLES.regions )>
+			<cfloop from="1" to="#ArrayLen(VARIABLES.regions)#" index="variables.idxRegion">
+				<cfset VARIABLES.DocumentTag.CSSRule.ApplyRange(sheet=VARIABLES.sheet,col=VARIABLES.regions[ variables.idxRegion ].col,colSpan=VARIABLES.regions[ variables.idxRegion ].colSpan,row=VARIABLES.regions[ variables.idxRegion ].row,rowSpan=VARIABLES.regions[ variables.idxRegion ].rowSpan )>
+			</cfloop>
+					
+		</cfif>
 		<!--- Update the sheet count. --->
 		<cfset VARIABLES.DocumentTag.SheetIndex++ />	
 	

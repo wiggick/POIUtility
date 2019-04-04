@@ -21,3 +21,8 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 [1]: http://www.bennadel.com
+
+# Home Mortgage Calculator
+
+Home Mortgage Calculator for Excel from @Vertex42"
+provided by [https://www.vertex42.com/](https://www.vertex42.com/) 

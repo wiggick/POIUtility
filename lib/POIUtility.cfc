@@ -1208,7 +1208,7 @@
 								LOCAL.CellType = LOCAL.Cell.GetCellType();
 							
 							
-								// Get teh value of the cell based on the data type. The thing
+								// Get the value of the cell based on the data type. The thing
 								// to worry about here is cell forumlas and cell dates. Formulas 
 								// can be strange and dates are stored as numeric types. For 
 								// this demo, I am not going to worry about that at all. I will 
