@@ -1,11 +1,17 @@
-# A fork of Ben's POI  
-* TODO Finish support for xls
-* Now Supports xlsx 
-* Revamped CSSRule.cfc to cfscript, added region support for rowSpan
+# A fork of Ben's POI 
+ This is my attempt at bringing the existing POIUtility up to date to use the latest Apache POI 4.0.1, make it not dependent on the server libraries, support both XLS and XLSX, and some new features.
+
+ Currently I've finished the groundwork for the poi: tags and a revamped CSSRule.cfc.  The next step will be an upgrade of the POIUtility.cfc to integrate with the changes in the css and support XLS and XLSX.
+
 * Added support for Apache POI 4.0.1
 * Added  Mark Mandel's JavaLoader.cfc
-* Added Document attribute EvaluateFormulas and final evaluate if true
-* Added Row check if row exists where it gets the row else create 
+* hex color find nearest for xls
+* Now Supports xlsx ( Just add an createXLSX="true" attribute in the document tag )
+* Revamped CSSRule.cfc to cfscript, added generic border style and color settings, added rowSpan, when used with colSpan, will merge regions.
+
+
+
+
 # Kinky Solutions POI ColdFusion Custom Tag
 
 by [Ben Nadel][1]

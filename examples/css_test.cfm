@@ -15,15 +15,15 @@
 	name="REQUEST.ExcelData"
 	createXLSX="true"
 	EvaluateFormulas="false"
-	style="font-family: verdana ; font-size: 10pt ; color: black ; white-space: nowrap ;">
+	style="font-family: verdana ; font-size: 10pt color:black; white-space: nowrap ;">
 
 	<poi:css method="getPOIColors" result="myPOIColors" />
 	<cfset colorList = StructKeyList(myPOIColors) />
+
 	<poi:css method="getFillPatterns" result="myFillPatterns" />
 	<cfset fillPatternList = StructKeyList(myFillPatterns) />
-	
-	
-	<!--- Define style classes. --->
+
+	<!--- Define style classes.--->
 	<poi:classes>
 
 		<poi:class
@@ -36,16 +36,16 @@
 			style="font-family: arial ; background-color: blue ; color: white ; font-size: 14pt ; border-bottom: solid 3px green ; border-top: 2px solid white ;"
 			/>
 
-	</poi:classes>
+	</poi:classes> 
 
 	<!--- Define Sheets. --->
 	<poi:sheets>
 		<poi:sheet
-			name="Color Test">		
+			name="Color - Pattern - Region Test">		
 		<cfset rowIndex = 1 />
 		
 		<poi:row class="Header" index="#rowIndex#">
-			<poi:cell index="1" ColSpan="10" value="Cell Background Color Test" />
+			<poi:cell index="1" ColSpan="10" value="Cell Solid Background Color with Random Text Color Test" />
 		</poi:row>
 		<cfset cellindex = 0 />
 		
@@ -54,7 +54,7 @@
 				<poi:row index="#rowIndex#">
 					<cfloop from="1" to="10" index="colorColumn">
 						<cfset cellIndex += 1>
-						<poi:cell index="#colorColumn#" style="border-bottom: solid 2px black; background-color: #ListGetAt(colorList,cellIndex)#;" type="string" value="#ListGetAt(colorList,cellIndex)#" />
+						<poi:cell index="#colorColumn#" style="border-bottom: solid 2px black; color: #ListGetAt(colorList, RandRange(1,StructCount(myPOIColors)))#; background-color: #ListGetAt(colorList,cellIndex)#;" type="string" value="#ListGetAt(colorList,cellIndex)#" />
 					</cfloop>
 				</poi:row>
 			</cfloop>
@@ -83,31 +83,28 @@
 				<poi:cell class="header" colspan="10" value="Colspan AND RowSpan Test" />
 			</poi:row>
 			<poi:row>
-					<poi:cell value="Fantastic It supports rowspan" style="vertical-align: top; border-style: thick; border-style: thick; border-color: orange; border-right-color: aqua; background-color: rose; background-pattern: less_dots; border-top: thick;" ColSpan="5" RowSpan="3" />
+					<poi:cell value="Fantastic It supports rowspan" style="vertical-align: top; border-style: thick; border-style: thick; border-color: orange; border-top: thick;" ColSpan="5" RowSpan="3" />
 					<poi:cell index="6" value="after the colspan" />
 			</poi:row>
 			<poi:row index="13" update="true">
-				<poi:cell index="6" value="can I fill in this in" />
+				<poi:cell index="6" value="can I fill this in" />
 			</poi:row>
 			<poi:row index="14">
 					<poi:cell value="after the rowspan" style="border-style:thick; border-color: red; color: blue;" />
 			</poi:row>
 			<poi:row>
-				<poi:cell class="header" colspan="10" value="Cell Auto Increment Test" />
+				<poi:cell class="header" colspan="10" value="Color by HEX (closest match fo xls)" />
 			</poi:row>
 			<poi:row>
-				<poi:cell value="1"/>
-				<poi:cell value="2" />
-				<poi:cell value="3" />
+				<poi:cell value="##0022FF"/><poi:cell value="" style="background-color:##0022FF;"/>
+				<poi:cell value="##ffee00"/><poi:cell value="" style="background-color:##ffee00;"/>
+				<poi:cell value="##ffee66"/><poi:cell value="" style="background-color:##ffee66;"/>
 			</poi:row>
-
-
-			
+	
 		</poi:sheet>
 	</poi:sheets>
 
 </poi:document>
-
 
 
 <!--- Tell the browser to expect an Excel file attachment. --->

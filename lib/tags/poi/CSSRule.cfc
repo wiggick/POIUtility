@@ -1,26 +1,31 @@
 /**
 *	CSSRule.cfc
 * 	A revamp of Ben Nadel's CSSRule.cfc to support Apache POI 4.0x, updated to cfscript
+*   Now requires JavaLoader to support latest version of POI (included in distribution for drop and play)
 *   Accessors are enabled to make it easier to write unit tests to grab the available values
+*   Added region support that provides colSpan and rowSpan
 * 
-*   @author: Chris Wigginton
+*   @author: Chris Wigginton, (Original Author Ben Nadel )
 * 	@verison 4.0
-* 
+*   @date 4/4/2019
 * 	@hint Handles CSS utility functions." 
 *   @accessors true
-* 	@output false
+*   @output false
+* 
 */
-component{
+component  {
 
    property struct CSS;
    property struct CSSCache;
    property struct CSSValidation;
    property any    IndexedColorMap;
+   property any    palette;
    property any    IndexedColors;
    property struct POIColors;
    property struct SortedPropertyKeys;
    property any    borderStyle;
    property struct borderStyles;
+   property struct htmlBorderStyles;
    property struct cssClasses;
    property any    fillPattern;
    property struct fillPatterns;
@@ -30,51 +35,46 @@ component{
    property struct verticalAlignments;
    property any    workbook;
 
+
   	
 	/**
 	* @hint Returns an initialized component.
-	* @javaLoader to configure this to use the latest and greates Apache POI and
+	* @isXLSX boolean on type of file
+	* @javaLoader to configure this to use the latest and greatest Apache POI and
 	*			  and make it support both xlsx and xls
-	* @workbook   to make the methods available from the workbook
+	* @workbook   provided for access to workbook methods
+	* @output false
 	*/
-	// TODO: Verify xls workbook has method getWorkbookType
-	public any function Init(required any javaLoader, required any workbook ) output="false"{
+	public any function Init(required boolean isXLSX, required any javaLoader, required any workbook ){
 
-		if( StructKeyExists(ARGUMENTS,"javaLoader") ){
-			VARIABLES.javaLoader = ARGUMENTS.javaLoader;
-		}
+		VARIABLES.isXLSX = ARGUMENTS.isXLSX;
 
-		if( StructKeyExists(ARGUMENTS,"workbook") ){
-			VARIABLES.workbook = ARGUMENTS.workbook;
-		}
+		VARIABLES.javaLoader = ARGUMENTS.javaLoader;
+		
+		VARIABLES.workbook = ARGUMENTS.workbook;
 
-		//TODO investigate the xssf clases to see if we can use the ss to support xls and xlsx
-		if( arguments.workbook.getWorkBookType().getExtension() eq "xlsx" ){
-			VARIABLES.isXLSX = true;
-			VARIABLES.classes = {
-				cellStyle            = "org.apache.poi.xssf.usermodel.XSSFCellStyle",
-				borderStyle          = "org.apache.poi.ss.usermodel.BorderStyle",
-				color                = "org.apache.poi.xssf.usermodel.XSSFColor",
-				colorIndex           = "org.apache.poi.ss.usermodel.IndexedColors",
-				fillPattern          = "org.apache.poi.ss.usermodel.FillPatternType",
-				horizontalAlignment  = "org.apache.poi.ss.usermodel.HorizontalAlignment",
-				verticalAlignment    = "org.apache.poi.ss.usermodel.VerticalAlignment",
-				cellRangeAddress     = "org.apache.poi.ss.util.CellRangeAddress",
-				RegionUtil           ="org.apache.poi.ss.util.RegionUtil"
-			};
-		}else {
-			VARIABLES.isXLSX = false;
-			VARIABLES.classes = {
-				cellStyle = "org.apache.poi.hssf.usermodel.HSSFCellStyle",
-				color     ="org.apache.poi.hssf.util.HSSFColor"
-			};
+		VARIABLES.classes = {
+			cellStyle            = "org.apache.poi.ss.usermodel.CellStyle",
+			borderStyle          = "org.apache.poi.ss.usermodel.BorderStyle",
+			fillPattern          = "org.apache.poi.ss.usermodel.FillPatternType",
+			horizontalAlignment  = "org.apache.poi.ss.usermodel.HorizontalAlignment",
+			verticalAlignment    = "org.apache.poi.ss.usermodel.VerticalAlignment",
+			cellRangeAddress     = "org.apache.poi.ss.util.CellRangeAddress",
+			RegionUtil           = "org.apache.poi.ss.util.RegionUtil"
 		};
 		
-		
-		// Keep for reference org.apache.poi.hssf.util.HSSFColor.HSSFColorPredefined
+		//color is the biggest change between xlsx and xls
+		if( ARGUMENTS.isXLSX ){
+			VARIABLES.isXLSX = true;
+			VARIABLES.classes["color"]       = "org.apache.poi.xssf.usermodel.XSSFColor";
+			VARIABLES.classes["colorIndex"]  = "org.apache.poi.ss.usermodel.IndexedColors";
 
-		//org.apache.poi.ss.usermodel.IndexedColors
-
+		}else{
+			VARIABLES.isXLSX = false;
+			VARIABLES.classes["color"]         = "org.apache.poi.hssf.util.HSSFColor";
+			VARIABLES.classes["colorIndex"]    = "org.apache.poi.hssf.util.HSSFColor$HSSFColorPredefined";
+			VARIABLES.classes["palette"]       = "org.apache.poi.hssf.usermodel.HSSFPalette";
+		}
 
 		// Set up the default CSS properties for this rule. This will
 		// be used to create other hash maps.
@@ -148,17 +148,20 @@ component{
 		"background-position" = "(top|right|bottom|left|\d+(\.\d+)?(px|%|em)) (top|right|bottom|left|\d+(\.\d+)?(px|%|em))",
 		"background-repeat" = "(no-)?repeat(-x|-y)?",
 		"border-top-width" = "\d+(\.\d+)?px",
+		"border-color" = "\w+|##[0-9ABCDEF]{6}",
 		"border-top-color" = "\w+|##[0-9ABCDEF]{6}",
-		"border-top-style" = "none|dotted|dashed|solid|double|groove",
+		"border-style" = "dashed|dash_dot|dash_dot_dot|dotted|double|hair|medium|medium_dashed|medium_dash_dot|medium_dash_dot_dot|none|thick|thin",
+		"border-top-style" = "dashed|dash_dot|dash_dot_dot|dotted|double|hair|medium|medium_dashed|medium_dash_dot|medium_dash_dot_dot|none|thick|thin",
+		"border-width" = "\d+(\.\d+)?px",
 		"border-right-width" = "\d+(\.\d+)?px",
 		"border-right-color" = "\w+|##[0-9ABCDEF]{6}",
-		"border-right-style" = "none|dotted|dashed|solid|double|groove",
+		"border-right-style" = "dashed|dash_dot|dash_dot_dot|dotted|double|hair|medium|medium_dashed|medium_dash_dot|medium_dash_dot_dot|none|thick|thin",
 		"border-bottom-width" = "\d+(\.\d+)?px",
 		"border-bottom-color" = "\w+|##[0-9ABCDEF]{6}",
-		"border-bottom-style" = "none|dotted|dashed|solid|double|groove",
+		"border-bottom-style" = "dashed|dash_dot|dash_dot_dot|dotted|double|hair|medium|medium_dashed|medium_dash_dot|medium_dash_dot_dot|none|thick|thin",
 		"border-left-width" = "\d+(\.\d+)?px",
 		"border-left-color" = "\w+|##[0-9ABCDEF]{6}",
-		"border-left-style" = "none|dotted|dashed|solid|double|groove",
+		"border-left-style" = "dashed|dash_dot|dash_dot_dot|dotted|double|hair|medium|medium_dashed|medium_dash_dot|medium_dash_dot_dot|none|thick|thin",
 		"bottom" = "-?\d+(\.\d+)?px",
 		"color" = "\w+|##[0-9ABCDEF]{6}",
 		"display" = "inline|block|block",
@@ -190,11 +193,11 @@ component{
 		"z-index" = "\d+"};
 
 
-	// Here is an array of the alpha-sorted keys.
-	VARIABLES.SortedPropertyKeys = StructKeyArray( VARIABLES.CSS );
+		// Here is an array of the alpha-sorted keys.
+		VARIABLES.SortedPropertyKeys = StructKeyArray( VARIABLES.CSS );
 
-	// Sort the keys alphabetically.
-	ArraySort( VARIABLES.SortedPropertyKeys, "textnocase", "asc" );
+		// Sort the keys alphabetically.
+		ArraySort( VARIABLES.SortedPropertyKeys, "textnocase", "asc" );
 
 
 		/*
@@ -204,107 +207,122 @@ component{
 		*/
 		VARIABLES.CSSCache = {};
 
-		// Create a struct of valid colors.
+		VARIABLES.HEXColorCache = {};
+
+		/*
+		 Create a structs of colors, borderStyles, and fillPatterns
+		 The Struct Key is valid for XLSX, the value is the mapped XLS equivalent.
+		 In most cases these will match, the exception being the POIColors that have a "1" such as BLACK1
+		 Another advantage of the mapping is that with the CSS Accessors, you can use the new css custom tag
+		 to call a method to pass in your own struct of mapping equivalents.
+		*/
 		VARIABLES.POIColors = {
-			AQUA                  = true,
-			AUTOMATIC             = true,
-			BLACK                 = true,
-			BLACK1                = true,
-			BLUE                  = true,
-			BLUE1                 = true,
-			BLUE_GREY             = true,
-			BRIGHT_GREEN          = true,
-			BRIGHT_GREEN1         = true,
-			BROWN                 = true,
-			CORAL                 = true,
-			CORNFLOWER_BLUE       = true,
-			DARK_BLUE             = true,
-			DARK_GREEN            = true,
-			DARK_RED              = true,
-			DARK_TEAL             = true,
-			DARK_YELLOW           = true,
-			GOLD                  = true,
-			GREEN                 = true,
-			GREY_25_PERCENT       = true,
-			GREY_40_PERCENT       = true,
-			GREY_50_PERCENT       = true,
-			GREY_80_PERCENT       = true,
-			INDIGO                = true,
-			LAVENDER              = true,
-			LEMON_CHIFFON         = true,
-			LIGHT_BLUE            = true,
-			LIGHT_CORNFLOWER_BLUE = true,
-			LIGHT_GREEN           = true,
-			LIGHT_ORANGE          = true,
-			LIGHT_TURQUOISE       = true,
-			LIGHT_TURQUOISE1      = true,
-			LIGHT_YELLOW          = true,
-			LIME                  = true,
-			MAROON                = true,
-			OLIVE_GREEN           = true,
-			ORANGE                = true,
-			ORCHID                = true,
-			PALE_BLUE             = true,
-			PINK                  = true,
-			PINK1                 = true,
-			PLUM                  = true,
-			RED                   = true,
-			RED1                  = true,
-			ROSE                  = true,
-			ROYAL_BLUE            = true,
-			SEA_GREEN             = true,
-			SKY_BLUE              = true,
-			TAN                   = true,
-			TEAL                  = true,
-			TURQUOISE             = true,
-			TURQUOISE1            = true,
-			VIOLET                = true,
-			WHITE                 = true,
-			WHITE1                = true,
-			YELLOW                = true,
-			YELLOW1               = true
+			AQUA                  = "AQUA",
+			AUTOMATIC             = "AUTOMATIC",
+			BLACK                 = "BLACK",
+			BLACK1                = "BLACK",
+			BLUE                  = "BLUE",
+			BLUE1                 = "BLUE",
+			BLUE_GREY             = "BLUE_GREY",
+			BRIGHT_GREEN          = "BRIGHT_GREEN",
+			BRIGHT_GREEN1         = "BRIGHT_GREEN",
+			BROWN                 = "BROWN",
+			CORAL                 = "CORAL",
+			CORNFLOWER_BLUE       = "CORNFLOWER_BLUE",
+			DARK_BLUE             = "DARK_BLUE",
+			DARK_GREEN            = "DARK_GREEN",
+			DARK_RED              = "DARK_RED",
+			DARK_TEAL             = "DARK_TEAL",
+			DARK_YELLOW           = "DARK_YELLOW",
+			GOLD                  = "GOLD",
+			GREEN                 = "GREEN",
+			GREY_25_PERCENT       = "GREY_25_PERCENT",
+			GREY_40_PERCENT       = "GREY_40_PERCENT",
+			GREY_50_PERCENT       = "GREY_50_PERCENT",
+			GREY_80_PERCENT       = "GREY_80_PERCENT",
+			INDIGO                = "INDIGO",
+			LAVENDER              = "LAVENDER",
+			LEMON_CHIFFON         = "LEMON_CHIFFON",
+			LIGHT_BLUE            = "LIGHT_BLUE",
+			LIGHT_CORNFLOWER_BLUE = "LIGHT_CORNFLOWER_BLUE",
+			LIGHT_GREEN           = "LIGHT_GREEN",
+			LIGHT_ORANGE          = "LIGHT_ORANGE",
+			LIGHT_TURQUOISE       = "LIGHT_TURQUOISE",
+			LIGHT_TURQUOISE1      = "LIGHT_TURQUOISE",
+			LIGHT_YELLOW          = "LIGHT_YELLOW",
+			LIME                  = "LIME",
+			MAROON                = "MAROON",
+			OLIVE_GREEN           = "OLIVE_GREEN",
+			ORANGE                = "ORANGE",
+			ORCHID                = "ORCHID",
+			PALE_BLUE             = "PALE_BLUE",
+			PINK                  = "PINK",
+			PINK1                 = "PINK",
+			PLUM                  = "PLUM",
+			RED                   = "RED",
+			RED1                  = "RED",
+			ROSE                  = "ROSE",
+			ROYAL_BLUE            = "ROYAL_BLUE",
+			SEA_GREEN             = "SEA_GREEN",
+			SKY_BLUE              = "SKY_BLUE",
+			TAN                   = "TAN",
+			TEAL                  = "TEAL",
+			TURQUOISE             = "TURQUOISE",
+			TURQUOISE1            = "TURQUOISE",
+			VIOLET                = "VIOLET",
+			WHITE                 = "WHITE",
+			WHITE1                = "WHITE",
+			YELLOW                = "YELLOW",
+			YELLOW1               = "YELLOW"
 		};
 
 		VARIABLES.borderStyles = {
-			 DASHED              = true,
-			 DASH_DOT	         = true,
-			 DASH_DOT_DOT        = true,
-			 DOTTED              = true,
-			 DOUBLE	             = true,
-			 HAIR	             = true,
-			 MEDIUM	             = true,
-			 MEDIUM_DASHED	     = true,
-			 MEDIUM_DASH_DOT	 = true,
-			 MEDIUM_DASH_DOT_DOT = true,
-			 NONE	             = true,
-			 SLANTED_DASH_DOT	 = true,
-			 THICK	             = true,
-			 THIN                = true
+			DASHED              = "DASHED",
+			DASH_DOT            = "DASH_DOT",
+			DASH_DOT_DOT        = "DASH_DOT_DOT",
+			DOTTED              = "DOTTED",
+			DOUBLE              = "DOUBLE",
+			HAIR                = "HAIR",
+			MEDIUM              = "MEDIUM",
+			MEDIUM_DASHED       = "MEDIUM_DASHED",
+			MEDIUM_DASH_DOT     = "MEDIUM_DASH_DOT",
+			MEDIUM_DASH_DOT_DOT = "MEDIUM_DASH_DOT_DOT",
+			NONE                = "NONE",
+			SLANTED_DASH_DOT    = "SLANTED_DASH_DOT",
+			THICK               = "THICK",
+			THIN                = "THIN"
+		};
+
+		VARIABLES.htmlBorderStyles = {
+			HIDDEN = "NONE",
+			GROOVE  = "DOUBLE",
+			RIDGE   = "DOUBLE",
+			INSET   = "DOUBLE",
+			OUTSET  = "DOUBLE",
+			INITIAL = "NONE", 
+			INHERIT = "NONE"
 		};
 
 		VARIABLES.fillPatterns = {
-			ALT_BARS            = true,
-			BIG_SPOTS           = true,
-			BRICKS              = true,
-			ALT_BARS	        = true,
-			BIG_SPOTS	        = true,
-			BRICKS	            = true,
-			DIAMONDS	        = true,
-			FINE_DOTS           = true,
-			LEAST_DOTS	        = true,
-			LESS_DOTS	        = true,
-			NO_FILL	            = true,
-			SOLID_FOREGROUND    = true,
-			SPARSE_DOTS	        = true,
-			SQUARES	            = true,
-			THICK_BACKWARD_DIAG = true,
-			THICK_FORWARD_DIAG	= true,
-			THICK_HORZ_BANDS	= true,
-			THICK_VERT_BANDS	= true,
-			THIN_BACKWARD_DIAG	= true,
-			THIN_FORWARD_DIAG	= true,
-			THIN_HORZ_BANDS	    = true,
-			THIN_VERT_BANDS     = true	
+			 ALT_BARS            = "ALT_BARS",
+			 BIG_SPOTS           = "BIG_SPOTS",
+			 BRICKS              = "BRICKS",
+			 DIAMONDS            = "DIAMONDS",
+			 FINE_DOTS           = "FINE_DOTS",
+			 LEAST_DOTS          = "LEAST_DOTS",
+			 LESS_DOTS           = "LESS_DOTS",
+			 NO_FILL             = "NO_FILL",
+			 SOLID_FOREGROUND    = "SOLID_FOREGROUND",
+			 SPARSE_DOTS         = "SPARSE_DOTS",
+			 SQUARES             = "SQUARES",
+			 THICK_BACKWARD_DIAG = "THICK_BACKWARD_DIAG",
+			 THICK_FORWARD_DIAG  = "THICK_FORWARD_DIAG",
+			 THICK_HORZ_BANDS    = "THICK_HORZ_BANDS",
+			 THICK_VERT_BANDS    = "THICK_VERT_BANDS",
+			 THIN_BACKWARD_DIAG  = "THIN_BACKWARD_DIAG",
+			 THIN_FORWARD_DIAG   = "THIN_FORWARD_DIAG",
+			 THIN_HORZ_BANDS     = "THIN_HORZ_BANDS",
+			 THIN_VERT_BANDS     = "THIN_VERT_BANDS" 
 		};
 
 		VARIABLES.horizontalAlignments = {
@@ -327,22 +345,22 @@ component{
 			TOP              = true
 		};
 
-	
-
-		// other possibilities
-		//org.apache.poi.hssf.util.HSSFColor.HSSFColorPredefined
-
-
 		//Class Instances for constants
-		VARIABLES.borderStyle = VARIABLES.javaLoader.create(  VARIABLES.classes.borderStyle );
-		VARIABLES.fillPattern = VARIABLES.javaLoader.create(  VARIABLES.classes.fillPattern );
-		VARIABLES.cellStyle = VARIABLES.javaLoader.create(  VARIABLES.classes.cellStyle );
-		VARIABLES.IndexedColorMap = ARGUMENTS.workbook.getStylesSource().getIndexedColors();
+		VARIABLES.borderStyle   = VARIABLES.javaLoader.create(  VARIABLES.classes.borderStyle );
+		VARIABLES.fillPattern   = VARIABLES.javaLoader.create(  VARIABLES.classes.fillPattern );
+		VARIABLES.cellStyle     = VARIABLES.javaLoader.create(  VARIABLES.classes.cellStyle );
 		VARIABLES.IndexedColors = VARIABLES.javaLoader.create(  VARIABLES.classes.colorIndex );
-		VARIABLES.horizontalAlignment = VARIABLES.javaLoader.create(  VARIABLES.classes.horizontalAlignment );
-		VARIABLES.verticalAlignment = VARIABLES.javaLoader.create(  VARIABLES.classes.verticalAlignment );
 
-		VARIABLES.regionUtil =VARIABLES.javaLoader.create(  VARIABLES.classes.regionUtil );
+		if( VARIABLES.isXLSX ){
+			VARIABLES.IndexedColorMap = ARGUMENTS.workbook.getStylesSource().getIndexedColors();
+		}else {			
+			VARIABLES.palette = ARGUMENTS.workbook.getCustomPalette();
+		}
+
+		VARIABLES.horizontalAlignment = VARIABLES.javaLoader.create(  VARIABLES.classes.horizontalAlignment );
+		VARIABLES.verticalAlignment   = VARIABLES.javaLoader.create(  VARIABLES.classes.verticalAlignment );
+		VARIABLES.regionUtil          = VARIABLES.javaLoader.create(  VARIABLES.classes.regionUtil );
+
 
 		return THIS;
 	}
@@ -407,7 +425,7 @@ component{
 	*/
 	public boolean function AddProperty( required struct PropertyMap, required string Property ){
 
-
+		LOCAL.result = false;
 		/*
 			The property should be in name=value pair format. Break up the
 			property into the two parts. Also, make sure that we only have
@@ -440,6 +458,7 @@ component{
 				ARGUMENTS.PropertyMap[ LOCAL.Name ] = LOCAL.Value;
 
 				// Return true for success.
+
 				return true;
 
 			}else{
@@ -452,27 +471,27 @@ component{
 				switch (LOCAL.propParent){
 
 					case "background":
-						SetBackground( ARGUMENTS.PropertyMap, LOCAL.Value );
+						LOCAL.result = SetBackground( ARGUMENTS.PropertyMap, LOCAL.Value );
 						break;
 
 					case "border":
-						SetBorder( ARGUMENTS.PropertyMap, LOCAL.Name, LOCAL.Value );
+						LOCAL.result = SetBorder( ARGUMENTS.PropertyMap, LOCAL.Name, LOCAL.Value );
 						break;
 
 					case "font":
-						SetFont( ARGUMENTS.PropertyMap, LOCAL.Value );
+						LOCAL.result = SetFont( ARGUMENTS.PropertyMap, LOCAL.Value );
 						break;
 
 					case "list":
-						SetListStyle( ARGUMENTS.PropertyMap, LOCAL.Value );
+						LOCAL.result = SetListStyle( ARGUMENTS.PropertyMap, LOCAL.Value );
 						break;
 
 					case "margin":
-						SetMargin( ARGUMENTS.PropertyMap, LOCAL.Value );
+						LOCAL.result = SetMargin( ARGUMENTS.PropertyMap, LOCAL.Value );
 						break;
 
 					case "padding":
-						SetPadding( ARGUMENTS.PropertyMap, LOCAL.Value );
+						LOCAL.result = SetPadding( ARGUMENTS.PropertyMap, LOCAL.Value );
 						break;
 				}
 			}
@@ -482,7 +501,8 @@ component{
 			Return out. If we made it this far, then we
 			didn't add a valid property.
 		*/
-		return false;
+
+		return LOCAL.result;
 	}
 
 	/**
@@ -507,13 +527,20 @@ component{
 		// Get a new font object from the workbook.
 		LOCAL.Font = ARGUMENTS.WorkBook.CreateFont();
 
-		if( Len( LOCAL.PropertyMap[ "background-color" ] )
-			AND StructKeyExists( VARIABLES.POIColors, LOCAL.PropertyMap[ "background-color" ] ) ){
-		 	ARGUMENTS.CellStyle.SetFillForegroundColor( getXSSFColorByName( UCase( LOCAL.PropertyMap[ 'background-color' ] ) ) );
+		if( Len( LOCAL.PropertyMap[ "background-color" ] ) ){
+
+			//Performing valid checks, mapping and defaults in getColorByName
+			LOCAL.targetBackgroundColor = getColorByName( UCase( LOCAL.PropertyMap[ 'background-color' ] ) );
+
+		 	if ( VARIABLES.isXLSX ){
+		 		ARGUMENTS.CellStyle.SetFillForegroundColor( LOCAL.targetBackgroundColor );
+		 	}else{
+		 		ARGUMENTS.CellStyle.SetFillForegroundColor( LOCAL.targetBackgroundColor.getIndex() );
+		 	}
 
 			 //let background-pattern do an override
-			if (! Len( LOCAL.PropertyMap[ "background-pattern" ] ) ){
-				ARGUMENTS.CellStyle.SetFillPattern( VARIABLES.fillPattern.SOLID_FOREGROUND );
+			if (! Len( LOCAL.PropertyMap[ "background-pattern" ] ) ){	
+					ARGUMENTS.CellStyle.SetFillPattern( VARIABLES.fillPattern.SOLID_FOREGROUND );			
 			}
 		}
 
@@ -523,32 +550,38 @@ component{
 		}else if( Len( LOCAL.PropertyMap[ "background-pattern" ] ) ){
 
 			if( StructKeyExists( VARIABLES.fillPatterns, UCase( LOCAL.PropertyMap[ "background-pattern" ] ) ) ){
-				ARGUMENTS.CellStyle.SetFillPattern( evaluate("VARIABLES.fillPattern.#UCase( LOCAL.PropertyMap[ 'background-pattern' ] )#") );
+				
+				ARGUMENTS.CellStyle.SetFillPattern( VARIABLES.fillPattern[ UCase( LOCAL.PropertyMap[ 'background-pattern' ] ) ] );
 			}
 		}
 
-
 		//handle generic border-style
 		if(  Len( LOCAL.PropertyMap[ "border-style" ] ) ){
-			if( StructKeyExists( VARIABLES.borderStyles, Ucase( LOCAL.PropertyMap[ 'border-style' ] ) ) ){
-					LOCAL.BorderStyle = evaluate("VARIABLES.BorderStyle.#LOCAL.PropertyMap[ 'border-style' ]#");
-					ARGUMENTS.CellStyle.SetBorderTop( LOCAL.BorderStyle );
-					ARGUMENTS.CellStyle.SetBorderBottom( LOCAL.BorderStyle );
-					ARGUMENTS.CellStyle.SetBorderRight( LOCAL.BorderStyle );
-					ARGUMENTS.CellStyle.SetBorderLeft( LOCAL.BorderStyle );
-				}
+			
+			LOCAL.borderStyleName = getMappedBorderStyleName( Ucase( LOCAL.PropertyMap[ 'border-style' ] ) );
+			LOCAL.BorderStyle = VARIABLES.BorderStyle[ LOCAL.borderStyleName ];
+			
+			ARGUMENTS.CellStyle.SetBorderTop( LOCAL.BorderStyle );
+			ARGUMENTS.CellStyle.SetBorderBottom( LOCAL.BorderStyle );
+			ARGUMENTS.CellStyle.SetBorderRight( LOCAL.BorderStyle );
+			ARGUMENTS.CellStyle.SetBorderLeft( LOCAL.BorderStyle );
+				
 		}
 		//handle generic border color
 
 		if(  Len( LOCAL.PropertyMap[ "border-color" ] ) ){
 
 			if( StructKeyExists( VARIABLES.POIColors, Ucase( LOCAL.PropertyMap[ 'border-color' ] ) ) ){
-				    LOCAL.BorderColor = getXSSFColorByName( UCase( PropertyMap[ 'border-color' ] ) );
+				    LOCAL.BorderColor = getColorByName( UCase( PropertyMap[ 'border-color' ] ) );
+				    if(! VARIABLES.isXLSX ){
+				    	LOCAL.BorderColor = LOCAL.BorderColor.getIndex();
+				    }
 				    
-					ARGUMENTS.CellStyle.SetTopBorderColor( LOCAL.BorderColor );
+			   		ARGUMENTS.CellStyle.SetTopBorderColor( LOCAL.BorderColor );
 					ARGUMENTS.CellStyle.SetRightBorderColor( LOCAL.BorderColor );
 					ARGUMENTS.CellStyle.SetBottomBorderColor( LOCAL.BorderColor );
 					ARGUMENTS.CellStyle.SetLeftBorderColor( LOCAL.BorderColor );
+					
 				}
 		}
 
@@ -556,9 +589,11 @@ component{
 		LOCAL.borderDirections = ["top","right","bottom","left"];
 		for( LOCAL.BorderSide in LOCAL.borderDirections ){
 			//set directional border styles
-			if(  Len( LOCAL.PropertyMap[ "border-#LOCAL.BorderSide#-style" ] )
-			  AND  StructKeyExists( VARIABLES.borderStyles, Ucase( LOCAL.PropertyMap[ 'border-#LOCAL.BorderSide#-style' ] ) ) ){
-				LOCAL.BorderStyle = evaluate("VARIABLES.BorderStyle.#LOCAL.PropertyMap[ 'border-#LOCAL.BorderSide#-style' ]#");
+			if(  Len( LOCAL.PropertyMap[ "border-#LOCAL.BorderSide#-style" ] ) ){
+
+				LOCAL.borderStyleName = getMappedBorderStyleName( Ucase( LOCAL.PropertyMap[ 'border-#LOCAL.BorderSide#-style' ] ) );
+				LOCAL.BorderStyle = VARIABLES.BorderStyle[ LOCAL.borderStyleName ];
+
 				// Check to see which direction we are working width.
 				switch ("#LOCAL.BorderSide#"){
 					case "top":
@@ -579,7 +614,12 @@ component{
 			//set directional border colors
 			if(  Len( LOCAL.PropertyMap[ "border-#LOCAL.BorderSide#-color" ] ) 
 				AND StructKeyExists( VARIABLES.POIColors, Ucase( LOCAL.PropertyMap[ 'border-#LOCAL.BorderSide#-color' ] ) ) ){
-				LOCAL.BorderColor = getXSSFColorByName( UCase( PropertyMap[ 'border-#LOCAL.BorderSide#-color' ] ) );
+				LOCAL.BorderColor = getColorByName( UCase( PropertyMap[ 'border-#LOCAL.BorderSide#-color' ] ) );
+				
+				if(! VARIABLES.isXLSX ){
+				    	LOCAL.BorderColor = LOCAL.BorderColor.getIndex();
+				    }
+
 				switch ("#LOCAL.BorderSide#"){
 					case "top":
 						ARGUMENTS.CellStyle.SetTopBorderColor( LOCAL.BorderColor );
@@ -606,8 +646,12 @@ component{
 			Len( LOCAL.PropertyMap[ "color" ] ) AND
 			StructKeyExists( VARIABLES.POIColors, LOCAL.PropertyMap[ "color" ] )
 			){
-
-			LOCAL.Font.SetColor( getXSSFColorByName( UCase( LOCAL.PropertyMap[ "color" ] ) ) );
+			LOCAL.textColor = getColorByName( UCase( LOCAL.PropertyMap[ "color" ] ) );
+			if( VARIABLES.isXLSX ){
+				LOCAL.Font.SetColor( LOCAL.textColor );
+			}else{
+				LOCAL.Font.SetColor( LOCAL.textColor.getIndex() );
+			}
 		}
 
 		// Check for font family.
@@ -659,13 +703,15 @@ component{
 
 		// Check to see if we have any text alignment.
 		if( StructKeyExists( VARIABLES.horizontalAlignments, ucase( LOCAL.PropertyMap[ 'text-align' ] )  ) ){
-			ARGUMENTS.CellStyle.SetAlignment( Evaluate("VARIABLES.horizontalAlignment.#ucase( LOCAL.PropertyMap[ 'text-align' ] )#" ) );
+			
+			ARGUMENTS.CellStyle.SetAlignment( VARIABLES.horizontalAlignment[ UCase( LOCAL.PropertyMap[ 'text-align' ] ) ] );
 		}
 	
 
 		// Check to see if we have any vertical alignment.
 		if( StructKeyExists( VARIABLES.verticalAlignments, ucase( LOCAL.PropertyMap[ 'vertical-align' ] )  ) ){
-			ARGUMENTS.CellStyle.SetVerticalAlignment( Evaluate("VARIABLES.verticalAlignment.#ucase( LOCAL.PropertyMap[ 'vertical-align' ] )#" ) );
+			
+			ARGUMENTS.CellStyle.SetVerticalAlignment( VARIABLES.verticalAlignment[ UCase( LOCAL.PropertyMap[ 'vertical-align' ] ) ] );
 		}
 	
 		/*
@@ -692,10 +738,10 @@ component{
 		return ARGUMENTS.CellStyle;
 	}
 
-
 	/**
 	* @hint Parses the property value into individual tokens
 	* @Value The value we want to parse into an array of tokens.
+	* @output false
 	*/
 	public array function GetPropertyTokens( required string Value ){
 
@@ -778,7 +824,6 @@ component{
 			LOCAL.Return[ 2 ] = LOCAL.Values[ 2 ];
 			LOCAL.Return[ 3 ] = LOCAL.Values[ 3 ];
 			LOCAL.Return[ 4 ] = LOCAL.Values[ 4 ];
-
 		}
 
 		// Return results
@@ -792,7 +837,7 @@ component{
 	* 
 	* @output false
 	*/
-	public void function SetBackground(required struct PropertyMap,required string Value ){
+	public boolean function SetBackground(required struct PropertyMap,required string Value ){
 
 		// Set up base properties that make up the background short hand.
 		LOCAL.CSS[ "background-attachment" ] = "";
@@ -800,6 +845,8 @@ component{
 		LOCAL.CSS[ "background-image" ] = "";
 		LOCAL.CSS[ "background-position" ] = "";
 		LOCAL.CSS[ "background-repeat" ] = "";
+
+		LOCAL.result = false;
 
 		// Get property tokens.
 		LOCAL.Tokens = GetPropertyTokens( ARGUMENTS.Value );
@@ -813,7 +860,7 @@ component{
 		for( LOCAL.Token in LOCAL.Tokens ) {
 
 			// Loop over properties, most restrictive first.
-			for( LOCAL.Property in LOCLA.PropArray ){
+			for( LOCAL.Property in LOCAL.PropArray ){
 
 				//Check to see if this value is valid. If this property
 				//already has a value, then skip.
@@ -826,15 +873,13 @@ component{
 					// Assign to property.
 					LOCAL.CSS[ LOCAL.Property ] = LOCAL.Token;
 
+
+
 					// Move to next token.
 					break;
-
 				}
-
 			}
-
 		}
-
 
 		// Loop over local CSS to apply property
 		for( LOCAL.Property in LOCAL.CSS ){
@@ -842,33 +887,74 @@ component{
 		// Set properties.
 			if( Len( LOCAL.CSS[ LOCAL.Property ] ) ){
 				ARGUMENTS.PropertyMap[ LOCAL.Property ] = LOCAL.CSS[ LOCAL.Property ];
+				LOCAL.result = true;
 			}
-
 		}
 
-		return;
+		return LOCAL.result;
 	}
 
 	/**
-	* @hint returns XSSFColor by colorName.  Since POI 4.0 you have to provide the workbench IndexedColorMap:
+	* @hint returns appropriate (XLS/XLSX) Color by colorName.  Since POI 4.0 you have to provide the workbench IndexedColorMap:
 	* @ColorName The name of color
 	* @Value The border short hand value.
 	* 
 	* @output false
 	*/
-	public any function getXSSFColorByName( string colorName="BLACK" ){
+	public any function getColorByName( string colorName ){
 
-		//Check if the color exists, default to Black
-		if( ! StructKeyExists(VARIABLES.poiColors, arguments.colorName ) ){
-			ARGUMENTS.colorName = "BLACK";
+		//First check if it's a hex color 
+		If( ArrayLen( REMatch( "##[0-9ABCDEFabcdef]{6}",ARGUMENTS.colorName ) ) ){
+			return getColorByHex( ARGUMENTS.colorName );
 		}
 
-		local.color = VARIABLES.javaLoader.create( VARIABLES.classes.color ).init( VARIABLES.indexedColorMap );
-		local.index = VARIABLES.IndexedColors.valueOf( JavaCast("string", ucase( ARGUMENTS.colorName ) ) ).getIndex();
-		local.color.setIndexed( JavaCast("Int", local.index ) );
+		//Check if the color exists, default to Black
+		if( ! StructKeyExists(VARIABLES.poiColors, ARGUMENTS.colorName ) ){
+			ARGUMENTS.colorName = "BLACK";
+		}else if (! VARIABLES.isXLSX ){
+			ARGUMENTS.colorName = VARIABLES.poiColors[ARGUMENTS.colorName];
+		}
+        if( VARIABLES.isXLSX ){
+			LOCAL.color = VARIABLES.javaLoader.create( VARIABLES.classes.color ).init( VARIABLES.indexedColorMap );
+			LOCAL.index = VARIABLES.IndexedColors.valueOf( JavaCast("string", ucase( ARGUMENTS.colorName ) ) ).getIndex();
+			LOCAL.color.setIndexed( JavaCast("Int", LOCAL.index ) );
+		}else{
 
-		return local.color;
+
+			LOCAL.color = VARIABLES.IndexedColors[ UCase( ARGUMENTS.colorName ) ];
+		}
+
+		return LOCAL.color;
       
+	}
+
+	public any function getColorByHex( string hexval ){
+
+		//first check the HEXColorCache to see if we've already created it
+		if( StructKeyExists( VARIABLES.HEXColorCache, ARGUMENTS.hexval ) ){
+			return VARIABLES.HEXColorCache[ ARGUMENTS.hexval ];
+		}	
+		LOCAL.RGBArray = HexToRGB( ARGUMENTS.hexval );
+
+		if( VARIABLES.isXLSX ){
+			LOCAL.awtColor = CreateObject("java","java.awt.Color").init(
+				JavaCast("int", LOCAL.RGBArray[1] ),
+				JavaCast("int", LOCAL.RGBArray[2] ),
+				JavaCast("int", LOCAL.RGBArray[3] ) );
+
+			LOCAL.color = VARIABLES.javaLoader.create( VARIABLES.classes.color ).init(
+			LOCAL.awtColor, VARIABLES.IndexedColorMap );			
+		}else{
+
+			LOCAL.color = VARIABLES.palette.findSimilarColor(
+				JavaCast("int", LOCAL.RGBArray[1] ),
+				JavaCast("int", LOCAL.RGBArray[2] ),
+				JavaCast("int", LOCAL.RGBArray[3] ));
+		}
+
+		VARIABLES.HEXColorCache[ ARGUMENTS.hexval ] = LOCAL.color;
+	
+		return LOCAL.color;
 	}
 
 	/**
@@ -879,7 +965,7 @@ component{
 	* 
 	* @output false
 	*/
-	public void function SetBorder(required struct PropertyMap,required string Name, required string Value ){
+	public boolean function SetBorder(required struct PropertyMap,required string Name, required string Value ){
 
 		//Set up base properties. We will use the top-border as our base
 		//since all borders act the same and we have validation set up for it.
@@ -930,6 +1016,7 @@ component{
 			//just the given property.
 			LOCAL.propertyArray = ListToArray(ARGUMENTS.Name);
 		}
+
 		for( LOCAL.Property in LOCAL.propertyArray ){
 			//Loop over list to apply CSS.
 
@@ -947,7 +1034,7 @@ component{
 			}
 		}
 
-		return;
+		return ( ArrayLen( LOCAL.propertyArray ) ? true : false );
 	}
 
 
@@ -958,8 +1045,9 @@ component{
 	* 
 	* @output false
 	*/
-	public void function SetFont(required struct PropertyMap,required string Value ){
+	public boolean function SetFont(required struct PropertyMap,required string Value ){
 
+		LOCAL.result = false;
 		//Set up base properties that make up the font short hand.
 		LOCAL.CSS[ "font-family" ] = "";
 		LOCAL.CSS[ "font-size" ] = "";
@@ -969,11 +1057,9 @@ component{
 		// Get property tokens.
 		LOCAL.Tokens = GetPropertyTokens( ARGUMENTS.Value );
 
-
 		//Now that we have all of our tokens, we are going to loop over the
 		//tokens and the properties and try to apply each. We want to apply
 		//tokens with the hardest to accomodate first.
-
 
 		LOCAL.fontProps = ["font-style","font-size","font-weight","font-family"];
 		for( LOCAL.Token in LOCAL.Tokens ){
@@ -992,12 +1078,13 @@ component{
 		for( LOCAL.Property in LOCAL.CSS ){
 			//Loop over local CSS to apply property.
 			if(  Len( LOCAL.CSS[ LOCAL.Property ] ) ){
+				LOCAL.result = true;
 			// Set properties.
 				ARGUMENTS.PropertyMap[ LOCAL.Property ] = LOCAL.CSS[ LOCAL.Property ];
 			}
 		}
 
-		return;
+		return local.result;
 	}
 
 	/**
@@ -1007,8 +1094,9 @@ component{
 	* 
 	* @output false
 	*/
-	public void function SetListStyle( required struct PropertyMap,required string Value ){
+	public boolean function SetListStyle( required struct PropertyMap,required string Value ){
 
+		LOCAL.result = false;
 		//Set up base properties that make up the list style short hand.
 		LOCAL.CSS[ "list-style-image" ] = "";
 		LOCAL.CSS[ "list-style-position" ] = "";
@@ -1035,10 +1123,11 @@ component{
 
 		for( LOCAL.Property in LOCAL.CSS ){
 			if( Len( LOCAL.CSS[ LOCAL.Property ] ) ){
+				LOCAL.result = true;
 				ARGUMENTS.PropertyMap[ LOCAL.Property ] = LOCAL.CSS[ LOCAL.Property ];
 			}
 		}
-		return;
+		return LOCAL.result;
 	}
 
 		/**
@@ -1048,21 +1137,26 @@ component{
 		* 
 		* @output false
 		*/
-	public void function SetMargin(required struct PropertyMap, required string Value ){
+	public boolean function SetMargin(required struct PropertyMap, required string Value ){
 		LOCAL.Metrics = ParseQuadMetric( ARGUMENTS.Value );
+		LOCAL.result = false;
 		if( IsValidValue( "margin-top", LOCAL.Metrics[ 1 ] ) ){
 			ARGUMENTS.PropertyMap[ "margin-top" ] = LOCAL.Metrics[ 1 ];
+			LOCAL.result = true;
 		}
 		if( IsValidValue( "margin-right", LOCAL.Metrics[ 2 ] ) ){
 			ARGUMENTS.PropertyMap[ "margin-right" ] = LOCAL.Metrics[ 2 ];
+			LOCAL.result = true;
 		}
 		if( IsValidValue( "margin-bottom", LOCAL.Metrics[ 3 ] ) ){
 			ARGUMENTS.PropertyMap[ "margin-bottom" ] = LOCAL.Metrics[ 3 ];
+			LOCAL.result = true;
 		}
 		if( IsValidValue( "margin-left", LOCAL.Metrics[ 4 ] ) ){
 			ARGUMENTS.PropertyMap[ "margin-left" ] = LOCAL.Metrics[ 4 ];
+			LOCAL.result = true;
 		}
-		return;
+		return LOCAL.result;
 
 	}
 
@@ -1073,21 +1167,39 @@ component{
 	* 
 	* @output false
 	*/
-	public void function SetPadding( required struct PropertyMap, required string Value){
+	public boolean function SetPadding( required struct PropertyMap, required string Value){
 		LOCAL.Metrics = ParseQuadMetric( ARGUMENTS.Value );
+		LOCAL.result = false;
 		if( IsValidValue( "padding-top", LOCAL.Metrics[ 1 ]) ){
 			ARGUMENTS.PropertyMap[ "padding-top" ] = LOCAL.Metrics[ 1 ];
+			LOCAL.result = true;
 		}
 		if( IsValidValue( "padding-right", LOCAL.Metrics[ 2 ] ) ){
 			ARGUMENTS.PropertyMap[ "padding-right" ] = LOCAL.Metrics[ 2 ];
+			LOCAL.result = true;
 		}
 		if( IsValidValue( "padding-bottom", LOCAL.Metrics[ 3 ] ) ){
 			ARGUMENTS.PropertyMap[ "padding-bottom" ] = LOCAL.Metrics[ 3 ];
+			LOCAL.result = true;
 		}
 		if( IsValidValue( "padding-left", LOCAL.Metrics[ 4 ] ) ){
 			ARGUMENTS.PropertyMap[ "padding-left" ] = LOCAL.Metrics[ 4 ];
+			LOCAL.result = true;
 		}
-		return;
+		return LOCAL.result;
+	}
+
+	public string function getMappedBorderStyleName( string styleName ){
+		if( StructKeyExists( VARIABLES.borderStyles, UCase( ARGUMENTS.styleName ) ) ){
+			if( VARIABLES.isXLSX ){
+				return ARGUMENTS.styleName;
+			}else{
+				return VARIABLES.borderStyles[ UCase( ARGUMENTS.styleName ) ];
+			}
+		}else if ( StructKeyExists( VARIABLES.htmlBorderStyles, UCase( ARGUMENTS.styleName ) ) ){
+			return VARIABLES.htmlBorderStyles[ UCase( ARGUMENTS.styleName ) ];
+		}
+		return 'NONE';
 	}
 
 	/**
@@ -1120,6 +1232,35 @@ component{
 	    	VARIABLES.RegionUtil.setRightBorderColor(  LOCAL.cellStyle.getRightBorderColor(),   LOCAL.range, ARGUMENTS.sheet );
     	}  	
 	}
-	
+	/**
+	* CFLIB Utility Functions
+	*/
+	/**
+	 * Convert a hexadecimal color into a RGB color value.
+	 * 
+	 * @param hexColor      6 character hexadecimal color value. 
+	 * @return Returns a string. 
+	 * @author Eric Carlisle (ericc@nc.rr.com) 
+	 * @version 1.0, November 6, 2001 
+	 * @output false
+	 */
+	public array function HexToRGB(hexColor){
+	  /* Strip out poundsigns. */
+	  LOCAL.tHexColor = replace(ARGUMENTS.hexColor,'##','','ALL');
+	    
+	  /* Establish vairable for RGB color. */
+	  LOCAL.RGBlist='';
+	  LOCAL.RGPpart='';    
 
+	  /* Initialize i */
+	  LOCAL.i=0;
+
+	  /* Loop through each hex triplet */
+	  for (LOCAL.i=1; LOCAL.i lte 5; LOCAL.i=LOCAL.i+2){
+	    LOCAL.RGBpart = InputBaseN(mid(LOCAL.tHexColor,LOCAL.i,2),16);
+	    LOCAL.RGBlist = listAppend(LOCAL.RGBlist,LOCAL.RGBpart);
+	  }
+	  return ListToArray(RGBlist);
+	}
+	
 }

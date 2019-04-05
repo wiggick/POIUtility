@@ -49,12 +49,12 @@
 			/>
 
 	  <!---
-			Set this to true to create XLSX files
+			Set this to false to create xls files
 		--->
 		<cfparam
 			name="ATTRIBUTES.createXLSX"
 			type="boolean"
-			default="false"
+			default="true"
 			/>
 
 		<!---
@@ -69,31 +69,33 @@
 		<cfset VARIABLES.loadPaths = ArrayNew(1)>
 
 
-		<cfif ATTRIBUTES.createXLSX>
+		<!---<cfif ATTRIBUTES.createXLSX>--->
 			<cfset VARIABLES.isXLSX = true>
-			<cfset VARIABLES.loadPaths[1] = replace( "#VARIABLES.poiPath#apache/poi-ooxml-4-0-1.jar","\","/","all")>
-			<cfset VARIABLES.loadPaths[2] = replace( "#VARIABLES.poiPath#apache/poi-4-0-1.jar","\","/","all")>
+			
+			<cfset VARIABLES.loadPaths[1] = replace( "#VARIABLES.poiPath#apache/poi-4-0-1.jar","\","/","all")>
+			<cfset VARIABLES.loadPaths[2] = replace( "#VARIABLES.poiPath#apache/poi-ooxml-4-0-1.jar","\","/","all")>
 			<cfset VARIABLES.loadPaths[3] = replace( "#VARIABLES.poiPath#apache/lib/commons-collections4-4.2.jar","\","/","all")>
 			<cfset VARIABLES.loadPaths[4] = replace( "#VARIABLES.poiPath#apache/xmlbeans-3.1.0/lib/xmlbeans-3.1.0.jar","\","/","all")>
 			<cfset VARIABLES.loadPaths[5] = replace( "#VARIABLES.poiPath#apache/poi-ooxml-schemas-4.0.1.jar","\","/","all")>
 			<cfset VARIABLES.loadPaths[6] = replace( "#VARIABLES.poiPath#apache/lib/commons-compress-1.18.jar","\","/","all")>
 
-			<cfset VARIABLES.workbookFactoryClass  ="org.apache.poi.ss.usermodel.WorkbookFactory">
-			<!---<cfset VARIABLES.workbookFactoryClass  ="org.apache.poi.xssf.usermodel.XSSFWorkbookFactory">--->
+			<cfset VARIABLES.workbookFactoryClass  = "org.apache.poi.ss.usermodel.WorkbookFactory">
+			<cfset VARIABLES.cellRegionClass       = "org.apache.poi.ss.util.CellRangeAddress">
+
+	    <cfif ATTRIBUTES.createXLSX>
+			
 			<cfset VARIABLES.workbookClass         = "org.apache.poi.xssf.usermodel.XSSFWorkbook">
 			<cfset VARIABLES.DataFormatClass       = "org.apache.poi.xssf.usermodel.XSSFDataFormat">
 			<cfset VARIABLES.formulaEvaluatorClass = "org.apache.poi.xssf.usermodel.XSSFFormulaEvaluator">
-			<cfset VARIABLES.cellRegionClass       = "org.apache.poi.ss.util.CellRangeAddress">
+					
 		<cfelse>
-			<!--- TODO:  see if I can convert this to WorkBookFactory --->
+
 			<cfset VARIABLES.isXLSX = false>
-			<cfset VARIABLES.loadPaths[1] = replace( "#VARIABLES.poiPath#apachepoi/poi-4.0.1.jar","\","/","all")>
-			<cfset VARIABLES.colorClass            = "org.apache.poi.hssf.util.HSSFColor">">
-			<cfset VARIABLES.cellStyleClass        = "org.apache.poi.hssf.usermodel.HSSFCellStyle">
+			
 			<cfset VARIABLES.workbookClass         = "org.apache.poi.hssf.usermodel.HSSFWorkbook">
 			<cfset VARIABLES.DataFormatClass       = "org.apache.poi.hssf.usermodel.HSSFDataFormat">
 			<cfset VARIABLES.formulaEvaluatorClass = "org.apache.poi.hssf.usermodel.HSSFFormulaEvaluator">
-			<cfset VARIABLES.cellRegionClass       = "org.apache.poi.hssf.util.Region">
+			
 		</cfif>
 		
 
@@ -115,11 +117,6 @@
 
 		<cfset VARIABLES.WorkBookFactory = VARIABLES.javaLoader.create(  VARIABLES.workbookFactoryClass ).Init() />
 
-
-		
-		
-	
-			
 			<!---
 			Create the Excel workbook to which we will be writing. Check
 			to see if we are creating a totally new workbook, or if we want
@@ -200,7 +197,7 @@
 			Create a instance of the utiltiy object, CSSRule. This will be use used
 			by this tag and its child tags to parse CSS as well as manipulate it.
 		--->
-		<cfset VARIABLES.CSSRule = CreateObject( "component", "CSSRule" ).Init(javaLoader = VARIABLES.javaLoader, WorkBook = VARIABLES.WorkBook ) />
+		<cfset VARIABLES.CSSRule = CreateObject( "component", "CSSRule" ).Init(isXLSX = ATTRIBUTES.createXLSX, javaLoader = VARIABLES.javaLoader, WorkBook = VARIABLES.WorkBook ) />
 
 		<!---
 			Create a struct to hold the CSS classes by name. These classes will be

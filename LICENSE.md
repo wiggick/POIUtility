@@ -1,5 +1,6 @@
+# POIUtility 4.0
 
-# The MIT License (MIT)
+### The MIT License (MIT)
 
 Copyright (c) 2013 [Ben Nadel][1]
 
@@ -22,7 +23,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 [1]: http://www.bennadel.com
 
-# Home Mortgage Calculator
+# Apache POI & XML Beans
+### Apache License
 
-Home Mortgage Calculator for Excel from @Vertex42"
-provided by [https://www.vertex42.com/](https://www.vertex42.com/) 
+# JavaLoader 
+### [Mark Mandel](https://github.com/markmandel/JavaLoader)
+Common Public License Version 1.0
+
