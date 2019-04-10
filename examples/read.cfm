@@ -10,13 +10,23 @@
 		By default, the POI Utilty will read in all three sheets
 		from the workbook. Since our excel sheet has a header
 		row, we want to strip it out of our returned queries.
+
+		Try playing around with the following
+
+		 ColumnsToRead=2, ColumnStart = 1
 	--->
 	<cfset arrSheets = objPOI.ReadExcel( 
 		FilePath = ExpandPath( "./exercises.xls" ),
 		HasHeaderRow = true
 		) />
-		
 	
+	<cfdump var="#arrSheets#">
+	<cfabort>
+
+	<!--- CW  -- I've made the query standard by having propery column names, you can 
+	still do it the old way as below, or you can just get the columnlist from the query
+	--->
+
 	<!--- 
 		The ReadExcel() has returned an array of sheet object.
 		Let's loop over sheets and output the data. NOTE: This
@@ -48,46 +58,23 @@
 			row of the excel was stripped out and put into an
 			array of column names.
 		--->
+		
 		<table border="1">
-		<tr>
-			<td>
-				#objSheet.ColumnNames[ 1 ]#
-			</td>
-			<td>
-				#objSheet.ColumnNames[ 2 ]#
-			</td>
-			<td>
-				#objSheet.ColumnNames[ 3 ]#
-			</td>
-		</tr>
-				
+		
+			<cfset colList = ArrayToList(objSheet.Query.getColumnList())>
+			<tr>
+			<cfloop list="#colList#" index="col">
+			<th><cfoutput>#col#</cfoutput></th>
+			</cfloop>
+			</tr>
+		
 		<!--- Loop over the data query. --->
 		<cfloop query="objSheet.Query">
-			
-			<!--- 
-				It is possible that the query read in read in 
-				blank rows of data. For our scenario, we know 
-				that we HAVE to have an exercise name. 
-				Therefore, if there is no exercise name returned
-				(in Column1), then this row is not valid - skip 
-				over it.
-			--->
-			<cfif Len( objSheet.Query.column1 )>
-				
-				<tr>
-					<td>
-						#objSheet.Query.column1#
-					</td>
-					<td>
-						#objSheet.Query.column2#
-					</td>
-					<td>
-						#objSheet.Query.column3#
-					</td>
-				</tr>
-		
-			</cfif>
-		
+			<tr>
+			<cfloop list="#colList#" index="colName">
+				<td>#objSheet.Query[colName][objSheet.Query.currentRow]#</td>
+			</cfloop>
+			</tr>
 		</cfloop>
 		</table>
 		

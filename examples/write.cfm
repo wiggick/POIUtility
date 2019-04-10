@@ -1,5 +1,5 @@
 <cfoutput>
-
+ 
 	<!--- Create an instance of the POIUtility.cfc. --->
 	<cfset objPOI = new lib.POIUtility() />
 		
@@ -37,7 +37,7 @@
 		workbook. Therefore, provide header values in the SAME
 		order as the column list above.
 	--->
-	<cfset objSheet.ColumnNames = "Name,Hair,Beast Feature" />
+	<cfset objSheet.ColumnNames = "Name,Hair,Best Feature" />
 		
 	<!--- Set the sheet name. --->
 	<cfset objSheet.SheetName = "Girls" />
@@ -49,12 +49,15 @@
 		have the option to pass either a single sheet object (as
 		we are donig in this example, or an array of sheet 
 		objects). We can also define header and row CSS.
+
+		RowCSS settings are the default for all cells.
 	--->
 	<cfset objPOI.WriteExcel(
 		FilePath = ExpandPath( "./girls.xls" ),
 		Sheets = objSheet,
-		HeaderCSS = "border-bottom: 2px solid dark_green ;",
-		RowCSS = "border-bottom: 1px dotted gray ;"
+		HeaderCSS = "color: white; background-color:blue;font-size:14pt;",
+		RowCSS = "color: black; background-color:white; font-size:12pt; border: 2px thin black ;",
+		AltRowCSS = "background-color: grey_25_percent; color: black; border-bottom: 1px thick red ;"
 		) />
 		
 </cfoutput>

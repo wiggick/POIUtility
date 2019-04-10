@@ -68,23 +68,21 @@
 		<cfset VARIABLES.poiPath =  GetDirectoryFromPath ( GetCurrentTemplatePath() )>
 		<cfset VARIABLES.loadPaths = ArrayNew(1)>
 
+		<cfset VARIABLES.isXLSX = true>
+		
+		<cfset VARIABLES.loadPaths[1] = replace( "#VARIABLES.poiPath#apache/poi-4-0-1.jar","\","/","all")>
+		<cfset VARIABLES.loadPaths[2] = replace( "#VARIABLES.poiPath#apache/poi-ooxml-4-0-1.jar","\","/","all")>
+		<cfset VARIABLES.loadPaths[3] = replace( "#VARIABLES.poiPath#apache/lib/commons-collections4-4.2.jar","\","/","all")>
+		<cfset VARIABLES.loadPaths[4] = replace( "#VARIABLES.poiPath#apache/xmlbeans-3.1.0/lib/xmlbeans-3.1.0.jar","\","/","all")>
+		<cfset VARIABLES.loadPaths[5] = replace( "#VARIABLES.poiPath#apache/poi-ooxml-schemas-4.0.1.jar","\","/","all")>
+		<cfset VARIABLES.loadPaths[6] = replace( "#VARIABLES.poiPath#apache/lib/commons-compress-1.18.jar","\","/","all")>
 
-		<!---<cfif ATTRIBUTES.createXLSX>--->
-			<cfset VARIABLES.isXLSX = true>
-			
-			<cfset VARIABLES.loadPaths[1] = replace( "#VARIABLES.poiPath#apache/poi-4-0-1.jar","\","/","all")>
-			<cfset VARIABLES.loadPaths[2] = replace( "#VARIABLES.poiPath#apache/poi-ooxml-4-0-1.jar","\","/","all")>
-			<cfset VARIABLES.loadPaths[3] = replace( "#VARIABLES.poiPath#apache/lib/commons-collections4-4.2.jar","\","/","all")>
-			<cfset VARIABLES.loadPaths[4] = replace( "#VARIABLES.poiPath#apache/xmlbeans-3.1.0/lib/xmlbeans-3.1.0.jar","\","/","all")>
-			<cfset VARIABLES.loadPaths[5] = replace( "#VARIABLES.poiPath#apache/poi-ooxml-schemas-4.0.1.jar","\","/","all")>
-			<cfset VARIABLES.loadPaths[6] = replace( "#VARIABLES.poiPath#apache/lib/commons-compress-1.18.jar","\","/","all")>
-
-			<cfset VARIABLES.workbookFactoryClass  = "org.apache.poi.ss.usermodel.WorkbookFactory">
-			<cfset VARIABLES.cellRegionClass       = "org.apache.poi.ss.util.CellRangeAddress">
+		<cfset VARIABLES.workbookFactoryClass  = "org.apache.poi.ss.usermodel.WorkbookFactory">
+		<cfset VARIABLES.cellRegionClass       = "org.apache.poi.ss.util.CellRangeAddress">
 
 	    <cfif ATTRIBUTES.createXLSX>
 			
-			<cfset VARIABLES.workbookClass         = "org.apache.poi.xssf.usermodel.XSSFWorkbook">
+			
 			<cfset VARIABLES.DataFormatClass       = "org.apache.poi.xssf.usermodel.XSSFDataFormat">
 			<cfset VARIABLES.formulaEvaluatorClass = "org.apache.poi.xssf.usermodel.XSSFFormulaEvaluator">
 					
@@ -92,7 +90,7 @@
 
 			<cfset VARIABLES.isXLSX = false>
 			
-			<cfset VARIABLES.workbookClass         = "org.apache.poi.hssf.usermodel.HSSFWorkbook">
+			
 			<cfset VARIABLES.DataFormatClass       = "org.apache.poi.hssf.usermodel.HSSFDataFormat">
 			<cfset VARIABLES.formulaEvaluatorClass = "org.apache.poi.hssf.usermodel.HSSFFormulaEvaluator">
 			

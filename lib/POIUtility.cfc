@@ -1,1676 +1,929 @@
-<!--- ------------------------------------------------------------------------- ----
+	/**
+	* Handles the reading an writing of Excel files using the POI
+	* package that ships with ColdFusion.
+	* Special thanks to Ken Auenson and his suggestions:
+	*
+	* http://ken.auenson.com/examples/func_ExcelToQueryStruct_POI_example.txt
+	* Special thanks to (the following) for helping me debug:
+	*
+	* Close File Input stream
+	* 	- Jeremy Knue
+	*
+	* Null cell values
+	* - Richard J Julia
+	* - Charles Lewis
+	* - John Morgan
+	*
+	* Not creating queries for empty sheets
+	* - Sophek Tounn
+	*
+	* @author Ben Nadel, Chris Wigginton (rewrite for Apache POI 4.0.1 )
+	* @version 4.0
+	* @date 4/5/2019
+	*
+	*  Update History:
+	*  04/09/2019 Chris Wigginton
+	* 	WOW Really? over 12 years since an update :-)
+	*   Read and Write both XLS and XLSX
+	*   now uses JavaJoader
+	*   now integrated with CSSRule.cfc for style management
+	*   support for specifying when the datarow start
+	*   support for number of rows to read
+	*   supports for column start and number of columns to read
+	*   hard check for empty _BLANK rows when reading in spreadsheet
+	*
+	*  04/04/2007 - Ben Nadel
+	*  Fixed several know bugs including:
+	*  - Undefined query for empty sheets.
+	*  - Handle NULL rows.
+	*  - Handle NULL cells.
+	*  - Closing file input stream to OS doesn't lock file.
+	*
+	*  02/01/2007 - Ben Nadel
+	*  Added new line support (with text wrap). Also set the sheet's
+	*  default column width.
+	*  01/21/2007 - Ben Nadel
+	*  Added basic CSS support.01/15/2007 - Ben Nadel
+	*  Laid the foundations for the CFC.
+	**/
 
-	Author:		Ben Nadel
-	Desc:		Handles the reading an writing of Excel files using the POI
-				package that ships with ColdFusion.
-				
-				Special thanks to Ken Auenson and his suggestions:				
-				http://ken.auenson.com/examples/func_ExcelToQueryStruct_POI_example.txt
-				
-				Special thanks to (the following) for helping me debug:
-				
-				Close File Input stream
-				- Jeremy Knue
-								
-				Null cell values
-				- Richard J Julia
-				- Charles Lewis
-				- John Morgan
-				
-				Not creating queries for empty sheets
-				- Sophek Tounn
-				
-	Sample Code:
-		
-				N/A
-				
-	Update History:
-	
-				04/04/2007 - Ben Nadel
-				Fixed several know bugs including:
-				- Undefined query for empty sheets.
-				- Handle NULL rows.
-				- Handle NULL cells.
-				- Closing file input stream to OS doesn't lock file.
-	
-				02/01/2007 - Ben Nadel
-				Added new line support (with text wrap). Also set the sheet's
-				default column width.
-				
-				01/21/2007 - Ben Nadel
-				Added basic CSS support.
-	
-				01/15/2007 - Ben Nadel
-				Laid the foundations for the CFC.
-	
------ ---------------------------------------------------------------------//// --->
+/**
+* @displayName POIUtility
+* @hint Handles the reading and writing of Microsoft Excel files using POI and ColdFusion.
+* @accessors false
+* @output false
+*/
+component {
 
-<cfcomponent
-	displayname="POIUtility"
-	output="false"
-	hint="Handles the reading and writing of Microsoft Excel files using POI and ColdFusion.">
-	
 
-	<cffunction name="Init" access="public" returntype="POIUtility" output="false"
-		hint="Returns an initialized POI Utility instance.">
-		
-		<!--- Return This reference. --->
-		<cfreturn THIS />
-	</cffunction>
-	
-	
-	<cffunction name="GetCellStyle" access="private" returntype="any" output="false"
-		hint="Takes the standardized CSS object and creates an Excel cell style.">
-		
-		<!--- Define arguments. --->
-		<cfargument name="WorkBook" type="any" required="true" />
-		<cfargument name="CSS" type="struct" required="true" />
-		
-		<cfscript>
-		
-			// Define the local scope.
-			var LOCAL = StructNew();
-		
-			// Create a default cell style object.
-			LOCAL.Style = ARGUMENTS.WorkBook.CreateCellStyle();
-			
-			// Check for background color.
-			if (ListFindNoCase( "AQUA,BLACK,BLUE,BLUE_GREY,BRIGHT_GREEN,BROWN,CORAL,CORNFLOWER_BLUE,DARK_BLUE,DARK_GREEN,DARK_RED,DARK_TEAL,DARK_YELLOW,GOLD,GREEN,GREY_25_PERCENT,GREY_40_PERCENT,GREY_50_PERCENT,GREY_80_PERCENT,INDIGO,LAVENDER,LEMON_CHIFFON,LIGHT_BLUE,LIGHT_CORNFLOWER_BLUE,LIGHT_GREEN,LIGHT_ORANGE,LIGHT_TURQUOISE,LIGHT_YELLOW,LIME,MAROON,OLIVE_GREEN,ORANGE,ORCHID,PALE_BLUE,PINK,PLUM,RED,ROSE,ROYAL_BLUE,SEA_GREEN,SKY_BLUE,TAN,TEAL,TURQUOISE,VIOLET,WHITE,YELLOW", ARGUMENTS.CSS[ "background-color" ] )){
-			
-				// Set the background color.
-				LOCAL.Style.SetFillForegroundColor(
-					CreateObject( 
-						"java",
-						"org.apache.poi.hssf.util.HSSFColor$#UCase( ARGUMENTS.CSS[ 'background-color' ] )#"
-						).GetIndex()
-					);
-				
-				
-				// Check for background style.
-				switch (ARGUMENTS.CSS[ "background-style" ]){
-				
-					case "dots":
-						LOCAL.Style.SetFillPattern( LOCAL.Style.FINE_DOTS );
-						break;
-						
-					case "vertical":
-						LOCAL.Style.SetFillPattern( LOCAL.Style.THIN_VERT_BANDS );
-						break;
-						
-					case "horizontal":
-						LOCAL.Style.SetFillPattern( LOCAL.Style.THIN_HORZ_BANDS );
-						break;
-						
-					default:
-						LOCAL.Style.SetFillPattern( LOCAL.Style.SOLID_FOREGROUND );
-						break;
-						
-				}
-				
-			}
-						
-			
-			// Check for the bottom border size.
-			if (Val( ARGUMENTS.CSS[ "border-bottom-width" ] )){
-				
-				// Check the type of border.
-				switch (ARGUMENTS.CSS[ "border-bottom-style" ]){
-					
-					// Figure out what kind of solid border we need.
-					case "solid":
-					
-						// Check the width.
-						switch(Val( ARGUMENTS.CSS[ "border-bottom-width" ] )){
-						
-							case 1:
-								LOCAL.Style.SetBorderBottom( LOCAL.Style.BORDER_HAIR );
-								break;
-							
-							case 2:
-								LOCAL.Style.SetBorderBottom( LOCAL.Style.BORDER_THIN );
-								break;
-							
-							case 3:
-								LOCAL.Style.SetBorderBottom( LOCAL.Style.BORDER_MEDIUM );
-								break;
-							
-							default:
-								LOCAL.Style.SetBorderBottom( LOCAL.Style.BORDER_THICK );							
-								break;
-												
-						}
-						
-						break;
-						
-					// Figure out what kind of dotted border we need.
-					case "dotted":
-						
-						// Check the width.
-						switch(Val( ARGUMENTS.CSS[ "border-bottom-width" ] )){
-						
-							case 1:
-								LOCAL.Style.SetBorderBottom( LOCAL.Style.BORDER_DOTTED );
-								break;
-							
-							case 2:
-								LOCAL.Style.SetBorderBottom( LOCAL.Style.BORDER_DASH_DOT_DOT );
-								break;
-							
-							default:
-								LOCAL.Style.SetBorderBottom( LOCAL.Style.BORDER_MEDIUM_DASH_DOT_DOT );
-								break;
-												
-						}
-						
-						break;
-						
-					// Figure out what kind of dashed border we need.
-					case "dashed":
-					
-						// Check the width.
-						switch(Val( ARGUMENTS.CSS[ "border-bottom-width" ] )){
-						
-							case 1:
-								LOCAL.Style.SetBorderBottom( LOCAL.Style.BORDER_DASHED );
-								break;
-							
-							default:
-								LOCAL.Style.SetBorderBottom( LOCAL.Style.BORDER_MEDIUM_DASHED );
-								break;
-												
-						}
-						
-						break;
-						
-					// There is only one option for double border.
-					case "double":
-						LOCAL.Style.SetBorderBottom( LOCAL.Style.BORDER_DOUBLE );
-						break;
-										
-				}
-				
-				// Check for a border color.
-				if (ListFindNoCase( "AQUA,BLACK,BLUE,BLUE_GREY,BRIGHT_GREEN,BROWN,CORAL,CORNFLOWER_BLUE,DARK_BLUE,DARK_GREEN,DARK_RED,DARK_TEAL,DARK_YELLOW,GOLD,GREEN,GREY_25_PERCENT,GREY_40_PERCENT,GREY_50_PERCENT,GREY_80_PERCENT,INDIGO,LAVENDER,LEMON_CHIFFON,LIGHT_BLUE,LIGHT_CORNFLOWER_BLUE,LIGHT_GREEN,LIGHT_ORANGE,LIGHT_TURQUOISE,LIGHT_YELLOW,LIME,MAROON,OLIVE_GREEN,ORANGE,ORCHID,PALE_BLUE,PINK,PLUM,RED,ROSE,ROYAL_BLUE,SEA_GREEN,SKY_BLUE,TAN,TEAL,TURQUOISE,VIOLET,WHITE,YELLOW", ARGUMENTS.CSS[ "border-bottom-color" ] )){
-				
-					LOCAL.Style.SetBottomBorderColor(
-						CreateObject( 
-							"java",
-							"org.apache.poi.hssf.util.HSSFColor$#UCase( ARGUMENTS.CSS[ 'border-bottom-color' ] )#"
-							).GetIndex()
-						);
-			
-				}				
-			
-			}
-			
-			
-			// Check for the left border size.
-			if (Val( ARGUMENTS.CSS[ "border-left-width" ] )){
-				
-				// Check the type of border.
-				switch (ARGUMENTS.CSS[ "border-left-style" ]){
-					
-					// Figure out what kind of solid border we need.
-					case "solid":
-					
-						// Check the width.
-						switch(Val( ARGUMENTS.CSS[ "border-left-width" ] )){
-						
-							case 1:
-								LOCAL.Style.SetBorderLeft( LOCAL.Style.BORDER_HAIR );
-								break;
-							
-							case 2:
-								LOCAL.Style.SetBorderLeft( LOCAL.Style.BORDER_THIN );
-								break;
-							
-							case 3:
-								LOCAL.Style.SetBorderLeft( LOCAL.Style.BORDER_MEDIUM );
-								break;
-							
-							default:
-								LOCAL.Style.SetBorderLeft( LOCAL.Style.BORDER_THICK );							
-								break;
-												
-						}
-						
-						break;
-						
-					// Figure out what kind of dotted border we need.
-					case "dotted":
-						
-						// Check the width.
-						switch(Val( ARGUMENTS.CSS[ "border-left-width" ] )){
-						
-							case 1:
-								LOCAL.Style.SetBorderLeft( LOCAL.Style.BORDER_DOTTED );
-								break;
-							
-							case 2:
-								LOCAL.Style.SetBorderLeft( LOCAL.Style.BORDER_DASH_DOT_DOT );
-								break;
-							
-							default:
-								LOCAL.Style.SetBorderLeft( LOCAL.Style.BORDER_MEDIUM_DASH_DOT_DOT );
-								break;
-												
-						}
-						
-						break;
-						
-					// Figure out what kind of dashed border we need.
-					case "dashed":
-					
-						// Check the width.
-						switch(Val( ARGUMENTS.CSS[ "border-left-width" ] )){
-						
-							case 1:
-								LOCAL.Style.SetBorderLeft( LOCAL.Style.BORDER_DASHED );
-								break;
-							
-							default:
-								LOCAL.Style.SetBorderLeft( LOCAL.Style.BORDER_MEDIUM_DASHED );
-								break;
-												
-						}
-						
-						break;
-						
-					// There is only one option for double border.
-					case "double":
-						LOCAL.Style.SetBorderLeft( LOCAL.Style.BORDER_DOUBLE );
-						break;
-										
-				}
-				
-				// Check for a border color.
-				if (ListFindNoCase( "AQUA,BLACK,BLUE,BLUE_GREY,BRIGHT_GREEN,BROWN,CORAL,CORNFLOWER_BLUE,DARK_BLUE,DARK_GREEN,DARK_RED,DARK_TEAL,DARK_YELLOW,GOLD,GREEN,GREY_25_PERCENT,GREY_40_PERCENT,GREY_50_PERCENT,GREY_80_PERCENT,INDIGO,LAVENDER,LEMON_CHIFFON,LIGHT_BLUE,LIGHT_CORNFLOWER_BLUE,LIGHT_GREEN,LIGHT_ORANGE,LIGHT_TURQUOISE,LIGHT_YELLOW,LIME,MAROON,OLIVE_GREEN,ORANGE,ORCHID,PALE_BLUE,PINK,PLUM,RED,ROSE,ROYAL_BLUE,SEA_GREEN,SKY_BLUE,TAN,TEAL,TURQUOISE,VIOLET,WHITE,YELLOW", ARGUMENTS.CSS[ "border-left-color" ] )){
-				
-					LOCAL.Style.SetLeftBorderColor(
-						CreateObject( 
-							"java",
-							"org.apache.poi.hssf.util.HSSFColor$#UCase( ARGUMENTS.CSS[ 'border-left-color' ] )#"
-							).GetIndex()
-						);
-			
-				}				
-			
-			}
-			
-			
-			// Check for the right border size.
-			if (Val( ARGUMENTS.CSS[ "border-right-width" ] )){
-				
-				// Check the type of border.
-				switch (ARGUMENTS.CSS[ "border-right-style" ]){
-					
-					// Figure out what kind of solid border we need.
-					case "solid":
-					
-						// Check the width.
-						switch(Val( ARGUMENTS.CSS[ "border-right-width" ] )){
-						
-							case 1:
-								LOCAL.Style.SetBorderRight( LOCAL.Style.BORDER_HAIR );
-								break;
-							
-							case 2:
-								LOCAL.Style.SetBorderRight( LOCAL.Style.BORDER_THIN );
-								break;
-							
-							case 3:
-								LOCAL.Style.SetBorderRight( LOCAL.Style.BORDER_MEDIUM );
-								break;
-							
-							default:
-								LOCAL.Style.SetBorderRight( LOCAL.Style.BORDER_THICK );							
-								break;
-												
-						}
-						
-						break;
-						
-					// Figure out what kind of dotted border we need.
-					case "dotted":
-						
-						// Check the width.
-						switch(Val( ARGUMENTS.CSS[ "border-right-width" ] )){
-						
-							case 1:
-								LOCAL.Style.SetBorderRight( LOCAL.Style.BORDER_DOTTED );
-								break;
-							
-							case 2:
-								LOCAL.Style.SetBorderRight( LOCAL.Style.BORDER_DASH_DOT_DOT );
-								break;
-							
-							default:
-								LOCAL.Style.SetBorderRight( LOCAL.Style.BORDER_MEDIUM_DASH_DOT_DOT );
-								break;
-												
-						}
-						
-						break;
-						
-					// Figure out what kind of dashed border we need.
-					case "dashed":
-					
-						// Check the width.
-						switch(Val( ARGUMENTS.CSS[ "border-right-width" ] )){
-						
-							case 1:
-								LOCAL.Style.SetBorderRight( LOCAL.Style.BORDER_DASHED );
-								break;
-							
-							default:
-								LOCAL.Style.SetBorderRight( LOCAL.Style.BORDER_MEDIUM_DASHED );
-								break;
-												
-						}
-						
-						break;
-						
-					// There is only one option for double border.
-					case "double":
-						LOCAL.Style.SetBorderRight( LOCAL.Style.BORDER_DOUBLE );
-						break;
-										
-				}
-				
-				// Check for a border color.
-				if (ListFindNoCase( "AQUA,BLACK,BLUE,BLUE_GREY,BRIGHT_GREEN,BROWN,CORAL,CORNFLOWER_BLUE,DARK_BLUE,DARK_GREEN,DARK_RED,DARK_TEAL,DARK_YELLOW,GOLD,GREEN,GREY_25_PERCENT,GREY_40_PERCENT,GREY_50_PERCENT,GREY_80_PERCENT,INDIGO,LAVENDER,LEMON_CHIFFON,LIGHT_BLUE,LIGHT_CORNFLOWER_BLUE,LIGHT_GREEN,LIGHT_ORANGE,LIGHT_TURQUOISE,LIGHT_YELLOW,LIME,MAROON,OLIVE_GREEN,ORANGE,ORCHID,PALE_BLUE,PINK,PLUM,RED,ROSE,ROYAL_BLUE,SEA_GREEN,SKY_BLUE,TAN,TEAL,TURQUOISE,VIOLET,WHITE,YELLOW", ARGUMENTS.CSS[ "border-right-color" ] )){
-				
-					LOCAL.Style.SetRightBorderColor(
-						CreateObject( 
-							"java",
-							"org.apache.poi.hssf.util.HSSFColor$#UCase( ARGUMENTS.CSS[ 'border-right-color' ] )#"
-							).GetIndex()
-						);
-			
-				}				
-			
-			}
-			
-			
-			// Check for the top border size.
-			if (Val( ARGUMENTS.CSS[ "border-top-width" ] )){
-				
-				// Check the type of border.
-				switch (ARGUMENTS.CSS[ "border-top-style" ]){
-					
-					// Figure out what kind of solid border we need.
-					case "solid":
-					
-						// Check the width.
-						switch(Val( ARGUMENTS.CSS[ "border-top-width" ] )){
-						
-							case 1:
-								LOCAL.Style.SetBorderTop( LOCAL.Style.BORDER_HAIR );
-								break;
-							
-							case 2:
-								LOCAL.Style.SetBorderTop( LOCAL.Style.BORDER_THIN );
-								break;
-							
-							case 3:
-								LOCAL.Style.SetBorderTop( LOCAL.Style.BORDER_MEDIUM );
-								break;
-							
-							default:
-								LOCAL.Style.SetBorderTop( LOCAL.Style.BORDER_THICK );							
-								break;
-												
-						}
-						
-						break;
-						
-					// Figure out what kind of dotted border we need.
-					case "dotted":
-						
-						// Check the width.
-						switch(Val( ARGUMENTS.CSS[ "border-top-width" ] )){
-						
-							case 1:
-								LOCAL.Style.SetBorderTop( LOCAL.Style.BORDER_DOTTED );
-								break;
-							
-							case 2:
-								LOCAL.Style.SetBorderTop( LOCAL.Style.BORDER_DASH_DOT_DOT );
-								break;
-							
-							default:
-								LOCAL.Style.SetBorderTop( LOCAL.Style.BORDER_MEDIUM_DASH_DOT_DOT );
-								break;
-												
-						}
-						
-						break;
-						
-					// Figure out what kind of dashed border we need.
-					case "dashed":
-					
-						// Check the width.
-						switch(Val( ARGUMENTS.CSS[ "border-top-width" ] )){
-						
-							case 1:
-								LOCAL.Style.SetBorderTop( LOCAL.Style.BORDER_DASHED );
-								break;
-							
-							default:
-								LOCAL.Style.SetBorderTop( LOCAL.Style.BORDER_MEDIUM_DASHED );
-								break;
-												
-						}
-						
-						break;
-						
-					// There is only one option for double border.
-					case "double":
-						LOCAL.Style.SetBorderTop( LOCAL.Style.BORDER_DOUBLE );
-						break;
-										
-				}
-				
-				// Check for a border color.
-				if (ListFindNoCase( "AQUA,BLACK,BLUE,BLUE_GREY,BRIGHT_GREEN,BROWN,CORAL,CORNFLOWER_BLUE,DARK_BLUE,DARK_GREEN,DARK_RED,DARK_TEAL,DARK_YELLOW,GOLD,GREEN,GREY_25_PERCENT,GREY_40_PERCENT,GREY_50_PERCENT,GREY_80_PERCENT,INDIGO,LAVENDER,LEMON_CHIFFON,LIGHT_BLUE,LIGHT_CORNFLOWER_BLUE,LIGHT_GREEN,LIGHT_ORANGE,LIGHT_TURQUOISE,LIGHT_YELLOW,LIME,MAROON,OLIVE_GREEN,ORANGE,ORCHID,PALE_BLUE,PINK,PLUM,RED,ROSE,ROYAL_BLUE,SEA_GREEN,SKY_BLUE,TAN,TEAL,TURQUOISE,VIOLET,WHITE,YELLOW", ARGUMENTS.CSS[ "border-top-color" ] )){
-				
-					LOCAL.Style.SetTopBorderColor(
-						CreateObject( 
-							"java",
-							"org.apache.poi.hssf.util.HSSFColor$#UCase( ARGUMENTS.CSS[ 'border-top-color' ] )#"
-							).GetIndex()
-						);
-			
-				}
-			
-			}
-			
-			
-			// Get a font object from the workbook.
-			LOCAL.Font = ARGUMENTS.WorkBook.CreateFont();
-			
-			// Check for color.
-			if (ListFindNoCase( "AQUA,BLACK,BLUE,BLUE_GREY,BRIGHT_GREEN,BROWN,CORAL,CORNFLOWER_BLUE,DARK_BLUE,DARK_GREEN,DARK_RED,DARK_TEAL,DARK_YELLOW,GOLD,GREEN,GREY_25_PERCENT,GREY_40_PERCENT,GREY_50_PERCENT,GREY_80_PERCENT,INDIGO,LAVENDER,LEMON_CHIFFON,LIGHT_BLUE,LIGHT_CORNFLOWER_BLUE,LIGHT_GREEN,LIGHT_ORANGE,LIGHT_TURQUOISE,LIGHT_YELLOW,LIME,MAROON,OLIVE_GREEN,ORANGE,ORCHID,PALE_BLUE,PINK,PLUM,RED,ROSE,ROYAL_BLUE,SEA_GREEN,SKY_BLUE,TAN,TEAL,TURQUOISE,VIOLET,WHITE,YELLOW", ARGUMENTS.CSS[ "color" ] )){
-			
-				LOCAL.Font.SetColor(
-					CreateObject( 
-						"java",
-						"org.apache.poi.hssf.util.HSSFColor$#UCase( ARGUMENTS.CSS[ 'color' ] )#"
-						).GetIndex()
-					);
-		
-			}
-		
-			
-			// Check for font family.
-			if (Len( ARGUMENTS.CSS[ "font-family" ] )){
-			
-				LOCAL.Font.SetFontName(
-					JavaCast( "string", ARGUMENTS.CSS[ "font-family" ] )
-					);
-				
-			}
-			
-			
-			// Check for font size.
-			if (Val( ARGUMENTS.CSS[ "font-size" ] )){
-			
-				LOCAL.Font.SetFontHeightInPoints( 
-					JavaCast( "int", Val( ARGUMENTS.CSS[ "font-size" ] ) )
-					);
-			
-			}
-			
-			
-			// Check for font style.
-			if (Len( ARGUMENTS.CSS[ "font-style" ] )){
-			
-				// Figure out which style we are talking about.
-				switch (ARGUMENTS.CSS[ "font-style" ]){
-					
-					case "italic":
-						LOCAL.Font.SetItalic(
-							JavaCast( "boolean", true )
-							);
-						break;
-				
-				}
-			
-			}
-			
-			
-			// Check for font weight.
-			if (Len( ARGUMENTS.CSS[ "font-weight" ] )){
-			
-				// Figure out what font weight we are using.
-				switch (ARGUMENTS.CSS[ "font-weight" ]){
-				
-					case "bold":
-						LOCAL.Font.SetBoldWeight(
-							LOCAL.Font.BOLDWEIGHT_BOLD
-							);
-						break;
-				
-				}
-			
-			}
-		
-			
-			// Apply the font to the style object.
-			LOCAL.Style.SetFont( LOCAL.Font );
-						
-			
-			// Check for cell text alignment.
-			switch (ARGUMENTS.CSS[ "text-align" ]){
-				
-				case "right":
-					LOCAL.Style.SetAlignment( LOCAL.Style.ALIGN_RIGHT );
-					break;
-					
-				case "center":
-					LOCAL.Style.SetAlignment( LOCAL.Style.ALIGN_CENTER );
-					break;
-					
-				case "justify":
-					LOCAL.Style.SetAlignment( LOCAL.Style.ALIGN_JUSTIFY );
-					break;
-			
-			}
-		
-			
-			// Cehck for cell vertical text alignment.
-			switch (ARGUMENTS.CSS[ "vertical-align" ]){
-				
-				case "bottom":
-					LOCAL.Style.SetVerticalAlignment( LOCAL.Style.VERTICAL_BOTTOM );
-					break;
-				
-				case "middle":
-					LOCAL.Style.SetVerticalAlignment( LOCAL.Style.VERTICAL_CENTER );
-					break;
-					
-				case "center":
-					LOCAL.Style.SetVerticalAlignment( LOCAL.Style.VERTICAL_CENTER );
-					break;
-					
-				case "justify":
-					LOCAL.Style.SetVerticalAlignment( LOCAL.Style.VERTICAL_JUSTIFY );
-					break;
-					
-				case "top":
-					LOCAL.Style.SetVerticalAlignment( LOCAL.Style.VERTICAL_TOP );
-					break;
-					
-			}
-			
-			
-			// Set the cell to wrap text. This will allow new lines to show
-			// up properly in the text.
-			LOCAL.Style.SetWrapText(
-				JavaCast( "boolean", true )
-				);
+	/**
+	* Init
+	* @hint Returns an initialized POI Utility instance.
+	* @output false
+	*/
+	public any function Init(){
 
-			
-			// Return the style object.
-			return( LOCAL.Style );
-			
-		</cfscript>		
-	</cffunction>
-	
-	
-	<cffunction name="GetNewSheetStruct" access="public" returntype="struct" output="false"
-		hint="Returns a default structure of what this Component is expecting for a sheet definition when WRITING Excel files.">
-		
-		<!--- Define the local scope. --->
-		<cfset var LOCAL = StructNew() />
-		
-		<cfscript>
-			
-			// This is the query that will hold the data.
-			LOCAL.Query = "";
-			
-			// THis is the list of columns (in a given order) that will be 
-			// used to output data.
-			LOCAL.ColumnList = "";
-		
-			// These are the names of the columns used when creating a header
-			// row in the Excel file.
-			LOCAL.ColumnNames = "";
+		VARIABLES.poiPath =  GetDirectoryFromPath ( GetCurrentTemplatePath() ) & "tags/poi/";
+		VARIABLES.loadPaths = [];
+		VARIABLES.isXLSX = true;
+		VARIABLES.loadPaths[1] = replace( "#VARIABLES.poiPath#apache/poi-4-0-1.jar","\","/","all");
+		VARIABLES.loadPaths[2] = replace( "#VARIABLES.poiPath#apache/poi-ooxml-4-0-1.jar","\","/","all");
+		VARIABLES.loadPaths[3] = replace( "#VARIABLES.poiPath#apache/lib/commons-collections4-4.2.jar","\","/","all");
+		VARIABLES.loadPaths[4] = replace( "#VARIABLES.poiPath#apache/xmlbeans-3.1.0/lib/xmlbeans-3.1.0.jar","\","/","all");
+		VARIABLES.loadPaths[5] = replace( "#VARIABLES.poiPath#apache/poi-ooxml-schemas-4.0.1.jar","\","/","all");
+		VARIABLES.loadPaths[6] = replace( "#VARIABLES.poiPath#apache/lib/commons-compress-1.18.jar","\","/","all");
 
-			// This is the name of the sheet as it appears in the bottom Excel tab.
-			LOCAL.SheetName = "";
-					
-			// Return the local structure containing the sheet info.
-			return( LOCAL );
+		VARIABLES.workbookFactoryClass  = "org.apache.poi.ss.usermodel.WorkbookFactory";
+		VARIABLES.cellRegionClass       = "org.apache.poi.ss.util.CellRangeAddress";
+
+
+		//workbookFactoryClass and the CSSRule do all the heavyLifting
+
+		//Place any specific engine XLS or XLSX here that the POIUtility needs to use
+		VARIABLES.XLSXClasses = {
+			formulaEvaluatorClass = "org.apache.poi.xssf.usermodel.XSSFFormulaEvaluator"
+		};
+
+	    VARIABLES.XLSClasses = {
+	    	formulaEvaluatorClass = "org.apache.poi.hssf.usermodel.HSSFFormulaEvaluator"
+		};
 		
-		</cfscript>
-	</cffunction>
-	
-	
-	<cffunction name="ParseRawCSS" access="private" returntype="struct" output="false"
-		hint="This takes raw HTML-style CSS and returns a default CSS structure with overwritten parsed values.">
-		
-		<!--- Define arguments. --->
-		<cfargument name="CSS" type="string" required="false" default="" />
-		
-		<cfscript>
+		VARIABLES.javaLoader = createObject("component", "lib.tags.poi.javaloader.JavaLoader").init(VARIABLES.loadPaths);
+
+		//Common to both XLS and XLSX
+		VARIABLES.WorkBookFactory = VARIABLES.javaLoader.create(  VARIABLES.workbookFactoryClass ).Init();
+		return this;
+
+	}
+
+
+
+	/**
+	* @hint Takes the standardized CSS object and creates an Excel cell style.
+	* @output false
+	*/
+	private any function GetCellStyle(required any WorkBook, required any CSS ){
+
+		// Create a default cell style object.
+		LOCAL.Style = ARGUMENTS.WorkBook.CreateCellStyle();
+		VARIABLES.CSSRule.ApplyToCellStyle(PropertyMap = ARGUMENTS.CSS, Workbook= ARGUMENTS.WorkBook , CellStyle=LocalStyle);
+		return LOCAL.Style;
+	}
+
+	/**
+	* @hint Create or return appropriate POI engine which would have a correctly initialized CSSRule for the given type
+	* @type Determines how the Workbook is created, read is read/close, create only creates the workbook 
+	*/
+	public any function GetPOIWorkBookObjects( required string FilePath, string type="read", boolean createCSSRule= false ){
+
+		if(! ListFind("read,write", ARGUMENTS.type ) ){
+			throw(type="POIUtiiltyException", Message="Invalid type: #ARGUMENTS.type#");
+		}
+
+		LOCAL.fileExtension = ListLast(ARGUMENTS.FilePath,".");
+
+		if(! ListFindNoCase("xls,xlsx", LOCAL.fileExtension ) ){
+				throw( type="POIUtilityException", message="Invalid extension type #local.fileExtension# for #ARGUMENTS.FilePath#");
+		}
+
+		LOCAL.isXLSX = ( lcase(local.FileExtension) eq "xlsx" );
+
+		if( ARGUMENTS.type eq "read" ){
 			
-			// Define the local scope.
-			var LOCAL = StructNew();
-			
-			// Create a new CSS structure.
-			LOCAL.CSS = StructNew();
-						
-			// Set default values.
-			LOCAL.CSS[ "background-color" ] = "";
-			LOCAL.CSS[ "background-style" ] = "";
-			LOCAL.CSS[ "border-bottom-color" ] = "";
-			LOCAL.CSS[ "border-bottom-style" ] = "";
-			LOCAL.CSS[ "border-bottom-width" ] = "";
-			LOCAL.CSS[ "border-left-color" ] = "";
-			LOCAL.CSS[ "border-left-style" ] = "";
-			LOCAL.CSS[ "border-left-width" ] = "";
-			LOCAL.CSS[ "border-right-color" ] = "";
-			LOCAL.CSS[ "border-right-style" ] = "";
-			LOCAL.CSS[ "border-right-width" ] = "";
-			LOCAL.CSS[ "border-top-color" ] = "";
-			LOCAL.CSS[ "border-top-style" ] = "";
-			LOCAL.CSS[ "border-top-width" ] = "";
-			LOCAL.CSS[ "color" ] = "";
-			LOCAL.CSS[ "font-family" ] = "";
-			LOCAL.CSS[ "font-size" ] = "";
-			LOCAL.CSS[ "font-style" ] = "";
-			LOCAL.CSS[ "font-weight" ] = "";
-			LOCAL.CSS[ "text-align" ] = "";
-			LOCAL.CSS[ "vertical-align" ] = "";
-			
-			
-			// Clean up the raw CSS values. We don't want to deal with complext CSS
-			// delcarations like font: bold 12px verdana. We want each style to be
-			// defined individually. Keep attacking the raw css and replacing in the
-			// single-values. Clean the initial white space first.
-			LOCAL.CleanCSS = ARGUMENTS.CSS.Trim().ToLowerCase().ReplaceAll(
-							
-				"\s+", " "
-				
-			// Make sure that all colons are right to the right of their types followed
-			// by a single space to rhe right.
-			).ReplaceAll(
-			
-				"\s*:\s*", ": "
-			
-			// Break out the full font declaration into parts.
-			).ReplaceAll(
-		
-				"font: bold (\d+\w{2}) (\w+)",
-				"font-size: $1 ; font-family: $2 ; font-weight: bold ;"
-				
-			// Break out the full font declaration into parts.
-			).ReplaceAll(
-		
-				"font: italic (\d+\w{2}) (\w+)",
-				"font-size: $1 ; font-family: $2 ; font-style: italic ;"
-				
-			// Break out the partial font declaration into parts.
-			).ReplaceAll(
-				
-				"font: (\d+\w{2}) (\w+)",
-				"font-size: $1 ; font-family: $2 ;"
-		
-			// Break out a font family name.
-			).ReplaceAll(
-				
-				"font: (\w+)", 
-				"font-family: $1 ;"
-			
-			// Break out the full border definition into single values for each of the
-			// four possible borders.
-			).ReplaceAll(
-			
-				"border: (\d+\w{2}) (solid|dotted|dashed|double) (\w+)", 
-				"border-top-width: $1 ; border-top-style: $2 ; border-top-color: $3 ; border-right-width: $1 ; border-right-style: $2 ; border-right-color: $3 ; border-bottom-width: $1 ; border-bottom-style: $2 ; border-bottom-color: $3 ; border-left-width: $1 ; border-left-style: $2 ; border-left-color: $3 ;"
-			
-			// Break out a partial border definition into values for each of the four
-			// possible borders. Set default color to black.
-			).ReplaceAll(
-			
-				"border: (\d+\w{2}) (solid|dotted|dashed|double)", 
-				"border-top-width: $1 ; border-top-style: $2 ; border-top-color: black ; border-right-width: $1 ; border-right-style: $2 ; border-right-color: black ; border-bottom-width: $1 ; border-bottom-style: $2 ; border-bottom-color: black ; border-left-width: $1 ; border-left-style: $2 ; border-left-color: black ;"
-			
-			// Break out a partial border definition into values for each of the four
-			// possible borders. Set default color to black and width to 2px.
-			).ReplaceAll(
-			
-				"border: (solid|dotted|dashed|double)", 
-				"border-top-width: 2px ; border-top-style: $2 ; border-top-color: black ; border-right-width: 2px ; border-right-style: $2 ; border-right-color: black ; border-bottom-width: 2px ; border-bottom-style: $2 ; border-bottom-color: black ; border-left-width: 2px ; border-left-style: $2 ; border-left-color: black ;"
-			
-			// Break out full, single-border definitions into single values.
-			).ReplaceAll(
-			
-				"(border-(top|right|bottom|left)): (\d+\w{2}) (solid|dotted|dashed|double) (\w+)", 
-				"$1-width: $3 ; $1-style: $4 ; $1-color: $5 ;"
-			
-			// Break out partial bord to single values. Set default color to black.
-			).ReplaceAll(
-			
-				"(border-(top|right|bottom|left)): (\d+\w{2}) (solid|dotted|dashed|double)", 
-				"$1-width: $3 ; $1-style: $4 ; $1-color: black ;"
-			
-			// Break out partial bord to single values. Set default color to black and
-			// default width to 2px.
-			).ReplaceAll(
-			
-				"(border-(top|right|bottom|left)): (solid|dotted|dashed|double)", 
-				"$1-width: 2px ; $1-style: $3 ; $1-color: black ;"
-			
-			// Break 4 part width definition into single width definitions to each of
-			// the four possible borders.
-			).ReplaceAll(
-			
-				"border-width: (\d\w{2}) (\d\w{2}) (\d\w{2}) (\d\w{2})",
-				"border-top-width: $1 ; border-right-width: $2 ; border-bottom-width: $3 ; border-left-width: $4 ;"
-			
-			// Break out full background in single values.
-			).ReplaceAll(
-			
-				"background: (solid|dots|vertical|horizontal) (\w+)", 
-				"background-style: $1 ; background-color: $2 ;"
-				
-			// Break out the partial background style into a single value style.
-			).ReplaceAll(
-			
-				"background: (solid|dots|vertical|horizontal)", 
-				"background-style: $1 ;"
-			
-			// Break out the partial background color into a single value style.
-			).ReplaceAll(
-			
-				"background: (\w+)", 
-				"background-color: $1 ;"
-				
-			// Clear out extra semi colons.
-			).ReplaceAll(
-				
-				"(\s*;\s*)+", 
-				" ; "
-			
+
+			LOCAL.FileInputStream = CreateObject( "java", "java.io.FileInputStream" ).Init(
+			JavaCast( "string", ARGUMENTS.FilePath )
 			);
-			
-			
-			// Break the clean CSS into name-value pairs.
-			LOCAL.Pairs = ListToArray( LOCAL.CleanCSS, ";" );
-			
-			// Loop over each CSS pair.
-			for (
-				LOCAL.PairIterator = LOCAL.Pairs.Iterator() ;
-				LOCAL.PairIterator.HasNext() ;
-				){
-				
-				// Break out the name value pair.
-				LOCAL.Pair = ToString(LOCAL.PairIterator.Next().Trim() & " : ").Split( ":" );
-				
-				// Get the name and value values.
-				LOCAL.Name = LOCAL.Pair[ 1 ].Trim();
-				LOCAL.Value = LOCAL.Pair[ 2 ].Trim();
-				
-				// Check to see if the name exists in the CSS struct. Remember, we only
-				// want to allow values that we KNOW how to handle.
-				if (StructKeyExists( LOCAL.CSS, LOCAL.Name )){
-				
-					// This is cool, overwrite it. At this point, however, we might
-					// not have exactly proper values. Not sure if I want to deal with that here
-					// or during the CSS application.
-					LOCAL.CSS[ LOCAL.Name ] = LOCAL.Value;
-				
-				}
-				
-			}
-			
-			
-			// Return the default CSS object.
-			return( LOCAL.CSS );		
 		
-		</cfscript>	
-	</cffunction>
-	
-	
-	<cffunction name="ReadExcel" access="public" returntype="any" output="false"
-		hint="Reads an Excel file into an array of strutures that contains the Excel file information OR if a specific sheet index is passed in, only that sheet object is returned.">
-		
-		<!--- Define arguments. --->
-		<cfargument
-			name="FilePath"
-			type="string"
-			required="true"
-			hint="The expanded file path of the Excel file."
-			/>
-			
-		<cfargument
-			name="HasHeaderRow"
-			type="boolean"
-			required="false"
-			default="false"
-			hint="Flags the Excel files has using the first data row a header column. If so, this column will be excluded from the resultant query."
-			/>
-			
-		<cfargument
-			name="SheetIndex"
-			type="numeric"
-			required="false"
-			default="-1"
-			hint="If passed in, only that sheet object will be returned (not an array of sheet objects)."
-			/>
-			
-		<cfscript>
-		
-			// Define the local scope.
-			var LOCAL = StructNew();
-			
-			
-			// Create a file input stream to the given Excel file.
-			LOCAL.FileInputStream = CreateObject( "java", "java.io.FileInputStream" ).Init( ARGUMENTS.FilePath );
-			
-			// Create the Excel file system object. This object is responsible 
-			// for reading in the given Excel file.
-			LOCAL.ExcelFileSystem = CreateObject( "java", "org.apache.poi.poifs.filesystem.POIFSFileSystem" ).Init( LOCAL.FileInputStream );
+			LOCAL.WorkBook = VARIABLES.WorkBookFactory.Create( LOCAL.FileInputStream );
 
-								
-			// Get the workbook from the Excel file system.
-			LOCAL.WorkBook = CreateObject(
-				"java",
-				"org.apache.poi.hssf.usermodel.HSSFWorkbook"
-				).Init(
-					LOCAL.ExcelFileSystem
-					);
-					
-					
-			// Check to see if we are returning an array of sheets OR just 
-			// a given sheet.
-			if (ARGUMENTS.SheetIndex GTE 0){
-			
-				// Read the sheet data for a single sheet.
-				LOCAL.Sheets = ReadExcelSheet(
-					LOCAL.WorkBook,
-					ARGUMENTS.SheetIndex,
-					ARGUMENTS.HasHeaderRow
-					);
-			
-			} else {
-			
-				// No specific sheet was requested. We are going to return an array
-				// of sheets within the Excel document.
-				
-				// Create an array to return.
-				LOCAL.Sheets = ArrayNew( 1 );
-				
-				// Loop over the sheets in the documnet.
-				for (
-					LOCAL.SheetIndex = 0 ;
-					LOCAL.SheetIndex LT LOCAL.WorkBook.GetNumberOfSheets() ;
-					LOCAL.SheetIndex = (LOCAL.SheetIndex + 1)
-					){
-					
-					// Add the sheet information.
-					ArrayAppend(
-						LOCAL.Sheets,
-						ReadExcelSheet(
-							LOCAL.WorkBook,
-							LOCAL.SheetIndex,
-							ARGUMENTS.HasHeaderRow
-							)
-						);
-					
-				}
-				
-				
-				
-			}
-			
-			
-			// Now that we have crated the Excel file system, 
-			// and read in the sheet data, we can close the 
-			// input file stream so that it is not locked.
 			LOCAL.FileInputStream.Close();
-						
-			// Return the array of sheets.
-			return( LOCAL.Sheets );
+
+		}else{
+			//writing we handle the fileOutput stream later
+			LOCAL.WorkBook = VARIABLES.WorkBookFactory.Create( JavaCast( "boolean",LOCAL.isXLSX ) );		
+		}
 		
-		</cfscript>		
-	</cffunction>
-	
-	
-	<cffunction name="ReadExcelSheet" access="public" returntype="struct" output="false"
-		hint="Takes an Excel workbook and reads the given sheet (by index) into a structure.">
+		// Now that we have crated the Excel file system,
+		// and read in the sheet data, we can close the
+		// input file stream so that it is not locked.
+		//LOCAL.FileInputStream.Close();
+		if( ARGUMENTS.createCSSRule ){
+			LOCAL.CSSRule = CreateObject( "component", "lib.tags.poi.CSSRule" ).Init( isXLSX =  LOCAL.isXLSX , javaLoader = VARIABLES.javaLoader, WorkBook = LOCAL.WorkBook );
+			LOCAL.result =  {WorkBook = LOCAL.Workbook, CSSRule = LOCAL.CssRule };
+		}else{
+			LOCAL.result = { WorkBook = LOCAL.Workbook };
+		}
 		
-		<!--- Define arguments. --->
-		<cfargument 
-			name="WorkBook" 
-			type="any" 
-			required="true" 
-			hint="This is a workbook object created by the POI API." 
-			/>
-			
-		<cfargument 
-			name="SheetIndex" 
-			type="numeric" 
-			required="false" 
-			default="0" 
-			hint="This is the index of the sheet within the passed in workbook. This is a ZERO-based index (coming from a Java object)."
-			/>
-			
-		<cfargument
-			name="HasHeaderRow"
-			type="boolean"
-			required="false"
-			default="false"
-			hint="This flags the sheet as having a header row or not (if so, it will NOT be read into the query)."
-			/>
-			
-		<cfscript>
+		return LOCAL.result;
+	}
+
+	/**
+	* @hint Reads an Excel file into an array of strutures that contains the Excel file information OR if a specific sheet index is passed in, only that sheet object is returned
+	* @FilePath The expanded file path of the Excel file to be used as the template
+	* @HasHeaderRow Flags the Excel files has using the first data row a header column. If so, this column will be excluded from the resultant query.
+	* @SheetIndex If passed in, only that sheet object will be returned (not an array of sheet objects)
+	* @RowsToRead  If 0, then all, otherwise limit
+	* @ColumnsToRead optional indicates number of columns to retrieve, 0 will grab to max columns available
+	* @ColumnStart optional  1 based index identifies column start
+	* @HeaderRowStart optional (requires true for HasHeaderRow) 1 based index.
+	* @DataRowStart optional, 1 based index, row index when to start reading data
+	* @output false
+	*/
+	public any function ReadExcel(required string FilePath ,boolean HasHeaderRow=true,
+		numeric SheetIndex  = -1,
+		numeric RowsToRead = 0,
+		numeric ColumnsToRead = 0,
+		numeric ColumnStart,
+	    numeric HeaderRowStart,
+	    numeric DataRowStart
+		 ){
+
+		//some validation here, we expect the user to pass in 1 based index rules
+		if( StructKeyExists(ARGUMENTS,"HeaderRowStart") ){
+			If( ! ARGUMENTS.HasHeaderRow ){
+				throw(type="POIUtility.invalidParameter", message="When specified, HeaderRowStart cannot be used without HasHeaderRow");
+			}
+			if( Arguments.HeaderRowStart LT 1 ){
+				throw(type="POIUtility.rangeException", message="When specified, HeaderStart row must be greater than 0");
+			}
+			if(  StructKeyExists(ARGUMENTS,"DataRowStart") AND Arguments.HeaderRowStart GT Arguments.DataRowStart ){
+				throw(type="POIUtility.rangeException", message="Header row cannot be after data row");
+			}				
+		}else{
+			ARGUMENTS.HeaderRowStart = 1;
+		}
+		//we may not have a header where we are reading in columnnames, but we can grab the data anywere
+		if( StructKeyExists(ARGUMENTS,"DataRowStart")  ){
+			if( Arguments.DataRowStart LT 1 ){
+				throw(type="POIUtility.rangeException", message="DataRowStart row must be greater than 0");
+			}
+
+		}
+
+		if( StructKeyExists(ARGUMENTS,"ColumnStart")  ){
+			if( Arguments.ColumnStart LT 1 ){
+				throw(type="POIUtility.rangeException", message="ColumnStart column must be greater than 0");
+			}
+
+		}
+
+		//We do the conversion to 0 based here
+		if( ARGUMENTS.HasHeaderRow ){
+			if(  StructKeyExists( ARGUMENTS,"HeaderRowStart" ) ){
+				ARGUMENTS.HeaderRowStart -= 1;
+			}else{
+				ARGUMENTS.HeaderRowStart = 0;
+			}
+		}
+
+		if( StructKeyExists( ARGUMENTS,"DataRowStart" ) ){
+				ARGUMENTS.DataRowStart -= 1;
+		}else{
+			if( ARGUMENTS.HasHeaderRow ){
+				ARGUMENTS.DataRowStart = ARGUMENTS.HeaderRowStart + 1;
+			}else{
+				ARGUMENTS.DataRowStart = 0;
+			}
+		}
+
 		
-			// Define the local scope.
-			var LOCAL = StructNew();
-			
-			// Set up the default return structure.
-			LOCAL.SheetData = StructNew();
-			
-			// This is the index of the sheet within the workbook.
-			LOCAL.SheetData.Index = ARGUMENTS.SheetIndex;
-			
-			// This is the name of the sheet tab.
-			LOCAL.SheetData.Name = ARGUMENTS.WorkBook.GetSheetName( 
-				JavaCast( "int", ARGUMENTS.SheetIndex ) 
+		if( StructKeyExists( ARGUMENTS,"ColumnStart" ) ){
+				ARGUMENTS.ColumnStart -= 1;
+		}else{
+			ARGUMENTS.ColumnStart = 0;
+		}
+		
+		LOCAL.WBObjects = GetPOIWorkBookObjects( FilePath = ARGUMENTS.FilePath, type="read" );
+		
+		// Check to see if we are returning an array of sheets OR just
+		// a given sheet.
+		
+		if (ARGUMENTS.SheetIndex GTE 0){
+
+			// Read the sheet data for a single sheet.
+			LOCAL.Sheets = ReadExcelSheet(
+				Workbook          = ARGUMENTS.WorkBook,
+				HasHeaderRow      = ARGUMENTS.HasHeaderRow,
+				SheetIndex        = ARGUMENTS.SheetIndex,
+				RowsToRead        = ARGUMENTS.RowsToRead,
+				ColumnsToRead       = ARGUMENTS.ColumnsToRead,
+				ColumnStart       = ARGUMENTS.ColumnStart,
+				HeaderRowStart    = ARGUMENTS.HederRowStart,
+				DataRowStart      = ARGUMENTS.DataRowStart	
 				);
 			
-			// This is the query created from the sheet.
-			LOCAL.SheetData.Query = QueryNew( "" );
+		} else {
+
+			// No specific sheet was requested. We are going to return an array
+			// of sheets within the Excel document.
+
+			// Create an array to return.
+			LOCAL.Sheets = ArrayNew( 1 );
+
+			// Loop over the sheets in the document.
+			for (
+				LOCAL.SheetIndex = 0 ;
+				LOCAL.SheetIndex LT LOCAL.WBObjects.WorkBook.GetNumberOfSheets() ;
+				LOCAL.SheetIndex = (LOCAL.SheetIndex + 1)
+				){
+
+				// Add the sheet information.
+				
+				ArrayAppend(
+					LOCAL.Sheets,
+					ReadExcelSheet(
+						Workbook          = LOCAL.WBObjects.WorkBook,
+						HasHeaderRow      = ARGUMENTS.HasHeaderRow,
+						SheetIndex        = LOCAL.SheetIndex,
+						RowsToRead        = ARGUMENTS.RowsToRead,
+						ColumnsToRead       = ARGUMENTS.ColumnsToRead,
+						ColumnStart       = ARGUMENTS.ColumnStart,
+						HeaderRowStart    = ARGUMENTS.HeaderRowStart,
+						DataRowStart      = ARGUMENTS.DataRowStart	
+						)
+					);					
+			}
+
+		}
 			
-			// This is a flag for the header row.
-			LOCAL.SheetData.HasHeaderRow = ARGUMENTS.HasHeaderRow;
-			
-			// An array of header columns names.
-			LOCAL.SheetData.ColumnNames = ArrayNew( 1 );
-			
-			// This keeps track of the min number of data columns.
-			LOCAL.SheetData.MinColumnCount = 0;
-			
-			// This keeps track of the max number of data columns.
-			LOCAL.SheetData.MaxColumnCount = 0;
-			
-			
-			// Get the sheet object at this index of the 
-			// workbook. This is based on the passed in data.
-			LOCAL.Sheet = ARGUMENTS.WorkBook.GetSheetAt(
+		// Return the array of sheets.
+		return( LOCAL.Sheets );
+
+	}
+
+	/**
+	* @hint Takes an Excel workbook and reads the given sheet (by index) into a structure
+	* @WorkBook This is a workbook object created by the POI API.
+	* @SheetIndex This is the index of the sheet within the passed in workbook. This is a ZERO-based index (coming from a Java object).
+	* @HasHeaderRow Flags the Excel files has using the first data row a header column. If so, this column will be excluded from the resultant query.
+	* @SheetIndex
+	* @RowsToRead 
+	* @ColumnsToRead 
+	* @ColumnStart 
+	* @HeaderRowStart
+	* @DataRowStart 
+	* @output false
+	*/
+	private struct function ReadExcelSheet( required any WorkBook, boolean HasHeaderRow = false, 
+		numeric SheetIndex,
+		numeric RowsToRead,
+		numeric ColumnsToRead,
+		numeric ColumnStart,
+	    numeric HeaderRowStart,
+	    numeric DataRowStart
+		 ){
+
+		// Set up the default return structure.
+		LOCAL.SheetData = {};
+
+		// This is the index of the sheet within the workbook.
+		LOCAL.SheetData.Index = ARGUMENTS.SheetIndex;
+
+		// This is the name of the sheet tab.
+		LOCAL.SheetData.Name = ARGUMENTS.WorkBook.GetSheetName(
 				JavaCast( "int", ARGUMENTS.SheetIndex )
 				);
+
+		// This is the query created from the sheet.
+		LOCAL.SheetData.Query = QueryNew( "" );
+
+		// This is a flag for the header row.
+		LOCAL.SheetData.HasHeaderRow = ARGUMENTS.HasHeaderRow;
+
+		// An array of header columns names.
+		LOCAL.SheetData.ColumnNames = [];
+
+		// This keeps track of the min number of data columns.
+		LOCAL.SheetData.MinColumnCount = 0;
+
+		// This keeps track of the max number of data columns.
+		LOCAL.SheetData.MaxColumnCount = 0;
+
+		// Get the sheet object at this index of the
+		// workbook. This is based on the passed in data.
+		LOCAL.Sheet = ARGUMENTS.WorkBook.GetSheetAt(
+			JavaCast( "int", ARGUMENTS.SheetIndex )
+		);
+
+		//This can give a false value if a given row used to have data.  
+		LOCAL.SheetData.MaxRowCount = LOCAL.Sheet.getLastRowNum();
+		
+		LOCAL.startRow = ( ARGUMENTS.HasHeaderRow  ? ARGUMENTS.HeaderRowStart:ARGUMENTS.DataRowStart );
+		LOCAL.lastRow = ( ARGUMENTS.RowsToRead GT 0 AND (ARGUMENTS.DataRowStart + ARGUMENTS.RowsToRead ) LT LOCAL.Sheet.GetLastRowNum() ? ARGUMENTS.RowsToRead + ARGUMENTS.DataRowStart : LOCAL.Sheet.GetLastRowNum() );
+		
+		for (
+			LOCAL.RowIndex = LOCAL.startRow;
+			LOCAL.RowIndex LTE LOCAL.lastRow;
+			LOCAL.RowIndex = (LOCAL.RowIndex + 1)
+			){
 				
-				
-			// Loop over the rows in the Excel sheet. For each
-			// row, we simply want to capture the number of
-			// columns we are working with that are NOT blank. 
-			// We will then use that data to figure out how many 
-			// columns we should be using in our query.
-			for (
-				LOCAL.RowIndex = 0 ; 
-				LOCAL.RowIndex LTE LOCAL.Sheet.GetLastRowNum() ;
-				LOCAL.RowIndex = (LOCAL.RowIndex + 1)
-				){
-				
-				// Get a reference to the current row.
-				LOCAL.Row = LOCAL.Sheet.GetRow(
-					JavaCast( "int", LOCAL.RowIndex )
+			// Get a reference to the current row.
+			LOCAL.Row = LOCAL.Sheet.GetRow(
+				JavaCast( "int", LOCAL.RowIndex )
+				);
+
+			// Check to see if we are at an undefined row. If we are, then
+			// our ROW variable has been destroyed.
+			if (StructKeyExists( LOCAL, "Row" )){
+
+				// Get the number of the last cell in the row. Since we
+				// are in a defined row, we know that we must have at
+				// least one row cell defined (and therefore, we must have
+				// a defined cell number).
+				LOCAL.ColumnCount = LOCAL.Row.GetLastCellNum();
+
+				// Update the running min column count.
+				LOCAL.SheetData.MinColumnCount = Min(
+					LOCAL.SheetData.MinColumnCount,
+					LOCAL.ColumnCount
 					);
-				
-				// Check to see if we are at an undefined row. If we are, then
-				// our ROW variable has been destroyed.
-				if (StructKeyExists( LOCAL, "Row" )){
-				
-					// Get the number of the last cell in the row. Since we
-					// are in a defined row, we know that we must have at 
-					// least one row cell defined (and therefore, we must have
-					// a defined cell number).
-					LOCAL.ColumnCount = LOCAL.Row.GetLastCellNum();
-				
-					// Update the running min column count.
-					LOCAL.SheetData.MinColumnCount = Min( 
-						LOCAL.SheetData.MinColumnCount,
-						LOCAL.ColumnCount
-						);
-						
-					// Update the running max column count.
-					LOCAL.SheetData.MaxColumnCount = Max(
-						LOCAL.SheetData.MaxColumnCount,
-						LOCAL.ColumnCount
-						);
-				
-				}
-				
-			}	 
-				
-				
-			// ASSERT: At this point, we know the min and max
-			// number of columns that we will encounter in this
-			// excel sheet.
-			
-			
-			// Loop over the number of column to create the basic
-			// column structure that we will use in our query.
-			for (
-				LOCAL.ColumnIndex = 1 ;
-				LOCAL.ColumnIndex LTE LOCAL.SheetData.MaxColumnCount ;
-				LOCAL.ColumnIndex = (LOCAL.ColumnIndex + 1)
-				){
-				
-				// Add the column. Notice that the name of the column is 
-				// the text "column" plus the column index. I am starting 
-				// my column indexes at ONE rather than ZERO to get it back 
-				// into a more ColdFusion standard notation.
-				QueryAddColumn(
-					LOCAL.SheetData.Query,
-					"column#LOCAL.ColumnIndex#",
-					"CF_SQL_VARCHAR",
-					ArrayNew( 1 )
+
+				// Update the running max column count.
+				LOCAL.SheetData.MaxColumnCount = Max(
+					LOCAL.SheetData.MaxColumnCount,
+					LOCAL.ColumnCount
 					);
-				
+
 			}
-			
-			
-			// ASSERT: At this pointer, we have a properly defined
-			// query that will be able to handle any standard row
-			// data that we encouter. 
-			
-			
-			// Loop over the rows in the Excel sheet. This time, we
-			// already have a query built, so we just want to start
-			// capturing the cell data.
-			for (
-				LOCAL.RowIndex = 0 ; 
-				LOCAL.RowIndex LTE LOCAL.Sheet.GetLastRowNum() ;
-				LOCAL.RowIndex = (LOCAL.RowIndex + 1)
-				){
-				
-				
-				// Get a reference to the current row.
-				LOCAL.Row = LOCAL.Sheet.GetRow(
-					JavaCast( "int", LOCAL.RowIndex )
-					);
-				
-				
-				// We want to add a row to the query so that we can 
-				// store the Excel cell values. The only thing we need to
-				// be careful of is that we DONT want to add a row if
-				// we are dealing with a header row.
-				if (
-					LOCAL.RowIndex OR
-					(
-						(NOT ARGUMENTS.HasHeaderRow) AND
-						StructKeyExists( LOCAL, "Row" )						
-					)){
-					
-					// We wither don't have a header row, or we are no
-					// longer in the first row... add record.
-					QueryAddRow( LOCAL.SheetData.Query );
-					
-				}				
-				
-								
-				// Check to see if we have a row. If we requested an 
-				// undefined row, then the NULL value will have 
-				// destroyed our Row variable.
-				if (StructKeyExists( LOCAL, "Row" )){
-					
-					// Get the number of the last cell in the row. Since we
-					// are in a defined row, we know that we must have at 
-					// least one row cell defined (and therefore, we must have
-					// a defined cell number).
-					LOCAL.ColumnCount = LOCAL.Row.GetLastCellNum();
-				 
-					// Now that we have an empty query, we are going to loop over 
-					// the cells COUNT for this data row and for each cell, we are
-					// going to create a query column of type VARCHAR. I understand
-					// that cells are going to have different data types, but I am 
-					// chosing to store everything as a string to make it easier.
-					for (
-						LOCAL.ColumnIndex = 0 ;
-						LOCAL.ColumnIndex LT LOCAL.ColumnCount ;
+
+		}
+		
+		LOCAL.startCol = ARGUMENTS.ColumnStart;
+		LOCAL.LastCol = ( ARGUMENTS.ColumnsToRead GT 0 AND (LOCAL.startCol + ARGUMENTS.ColumnsToRead ) LT LOCAL.SheetData.MaxColumnCount ? LOCAL.startCol + ARGUMENTS.ColumnsToRead : LOCAL.SheetData.MaxColumnCount );
+	
+		//Do a hard check on our range we intend to load
+		
+		LOCAL.lastRow = findLastRowWithData( Sheet=LOCAL.Sheet, 
+		RowStart=LOCAL.startRow, RowEnd=LOCAL.lastRow,
+		ColStart=LOCAL.startCol, ColEnd = LOCAL.LastCol);
+
+		if ( LOCAL.lastRow eq -1 ){
+			//Sheet is just empty
+			return LOCAL.SheetData;
+		}
+
+
+		// ASSERT: At this pointer, we have a properly defined
+		// query that will be able to handle any standard row
+		// data that we encouter.
+
+
+		// Loop over the rows in the Excel sheet. This time, we
+		// already have a query built, so we just want to start
+		// capturing the cell data.
+		//Convert DataRowStart to 0 based
+		for (
+			LOCAL.RowIndex =  LOCAL.startRow;
+			LOCAL.RowIndex LTE LOCAL.lastRow;
+			LOCAL.RowIndex = ( LOCAL.RowIndex + 1 )
+			){
+
+			// Get a reference to the target row.
+			LOCAL.Row = LOCAL.Sheet.GetRow(
+				JavaCast( "int", LOCAL.RowIndex )
+				);
+
+			//Assumption, HEADER Row will ALWAYS come first if  StructKeyExists
+			if( Arguments.HasHeaderRow AND LOCAL.RowIndex EQ Arguments.HeaderRowStart ){
+				for (
+						LOCAL.ColumnIndex = LOCAL.startCol;
+						LOCAL.ColumnIndex LT LOCAL.LastCol ;
 						LOCAL.ColumnIndex = (LOCAL.ColumnIndex + 1)
 						){
 						
-						// Check to see if we might be dealing with a header row.
-						// This will be true if we are in the first row AND if
-						// the user had flagged the header row usage.
-						if (
-							ARGUMENTS.HasHeaderRow AND 
-							(NOT LOCAL.RowIndex)
-							){
-						
-							// Try to get a header column name (it might throw
-							// an error). We want to take that cell value and
-							// add it to the array of header values that we will
-							// return with the sheet data.
-							try {
-							
-								// Add the cell value to the column names.
-								ArrayAppend( 
-									LOCAL.SheetData.ColumnNames,
-									LOCAL.Row.GetCell(
-										JavaCast( "int", LOCAL.ColumnIndex )
-										).GetStringCellValue()
-									);
-							
-							} catch (any ErrorHeader){
-							
-								// There was an error grabbing the text of the 
-								// header column type. Just add an empty string 
-								// to make up for it.
-								ArrayAppend( 
-									LOCAL.SheetData.ColumnNames,
-									""
-									);
-							
-							}
-						
-						
-						// We are either not using a Header row or we are no
-						// longer dealing with the first row. In either case, 
-						// this data is standard cell data.
-						} else {
-						
-							// When getting the value of a cell, it is important to know 
-							// what type of cell value we are dealing with. If you try 
-							// to grab the wrong value type, an error might be thrown. 
-							// For that reason, we must check to see what type of cell 
-							// we are working with. These are the cell types and they 
-							// are constants of the cell object itself:
-					 		//
-							// 0 - CELL_TYPE_NUMERIC
-							// 1 - CELL_TYPE_STRING
-							// 2 - CELL_TYPE_FORMULA
-							// 3 - CELL_TYPE_BLANK
-							// 4 - CELL_TYPE_BOOLEAN
-							// 5 - CELL_TYPE_ERROR
-					 
-							// Get the cell from the row object.
-							LOCAL.Cell = LOCAL.Row.GetCell(
-								JavaCast( "int", LOCAL.ColumnIndex )
-								);
-								
-							// Check to see if we are dealing with a valid cell value.
-							// If this was an undefined cell, the GetCell() will
-							// have returned NULL which will have killed our Cell 
-							// variable. 
-							if (StructKeyExists( LOCAL, "Cell" )){
-							
-								// ASSERT: We are definitely dealing with a valid
-								// cell which has some sort of defined value.
-							
-								// Get the type of data in this cell.
-								LOCAL.CellType = LOCAL.Cell.GetCellType();
-							
-							
-								// Get the value of the cell based on the data type. The thing
-								// to worry about here is cell forumlas and cell dates. Formulas 
-								// can be strange and dates are stored as numeric types. For 
-								// this demo, I am not going to worry about that at all. I will 
-								// just grab dates as floats and formulas I will try to grab as
-								// numeric values.
-								if (LOCAL.CellType EQ LOCAL.Cell.CELL_TYPE_NUMERIC) {
-						 
-									// Get numeric cell data. This could be a standard number, 
-									// could also be a date value. I am going to leave it up to 
-									// the calling program to decide.
-									LOCAL.CellValue = LOCAL.Cell.GetNumericCellValue();
-						 
-								} else if (LOCAL.CellType EQ LOCAL.Cell.CELL_TYPE_STRING){
-						 
-									LOCAL.CellValue = LOCAL.Cell.GetStringCellValue();
-						 
-								} else if (LOCAL.CellType EQ LOCAL.Cell.CELL_TYPE_FORMULA){
-						 
-									// Since most forumlas deal with numbers, I am going to try 
-									// to grab the value as a number. If that throws an error, I 
-									// will just grab it as a string value.
-									try {
-									
-										LOCAL.CellValue = LOCAL.Cell.GetNumericCellValue();
-						 
-									} catch (any Error1){
-						 
-										// The numeric grab failed. Try to get the value as a 
-										// string. If this fails, just force the empty string.
-										try {
-									
-											LOCAL.CellValue = LOCAL.Cell.GetStringCellValue();
-											
-										} catch (any Error2){
-											
-											// Force empty string.
-											LOCAL.CellValue = "";
-											
-						 				}
-									}
-						 
-								} else if (LOCAL.CellType EQ LOCAL.Cell.CELL_TYPE_BLANK){
-						 
-									LOCAL.CellValue = "";
-						 
-								} else if (LOCAL.CellType EQ LOCAL.Cell.CELL_TYPE_BOOLEAN){
-						 
-									LOCAL.CellValue = LOCAL.Cell.GetBooleanCellValue();
-						 
-								} else {
-						 
-									// If all else fails, get empty string.
-									LOCAL.CellValue = "";
-						 
-								}
-						 
-						 
-								// ASSERT: At this point, we either got the cell value out of the 
-								// Excel data cell or we have thrown an error or didn't get a 
-								// matching type and just have the empty string by default. 
-								// No matter what, the object LOCAL.CellValue is defined and 
-								// has some sort of SIMPLE ColdFusion value in it.
-						 
-						 
-								// Now that we have a value, store it as a string in the ColdFusion 
-								// query object. Remember again that my query names are ONE based 
-								// for ColdFusion standards. That is why I am adding 1 to the 
-								// cell index.
-								LOCAL.SheetData.Query[ "column#(LOCAL.ColumnIndex + 1)#" ][ LOCAL.SheetData.Query.RecordCount ] = JavaCast( "string", LOCAL.CellValue );
-						 
-							}
-													
-						}
-						
-					}				
-				
-				}
-					
-			}
-			
-			
-			// Return the sheet object that contains all the Excel data.
-			return(
-				LOCAL.SheetData
-				);
-		
-		</cfscript>		
-	</cffunction>
-	
-	
-	<cffunction name="WriteExcel" access="public" returntype="void" output="false"
-		hint="Takes an array of 'Sheet' structure objects and writes each of them to a tab in the Excel file.">
-		
-		<!--- Define arguments. --->
-		<cfargument 
-			name="FilePath" 
-			type="string" 
-			required="true" 
-			hint="This is the expanded path of the Excel file."
-			/>
-			
-		<cfargument
-			name="Sheets"
-			type="any"
-			required="true"
-			hint="This is an array of the data that is needed for each sheet of the excel OR it is a single Sheet object. Each 'Sheet' will be a structure containing the Query, ColumnList, ColumnNames, and SheetName."
-			/>
-			
-		<cfargument 
-			name="Delimiters" 
-			type="string" 
-			required="false" 
-			default="," 
-			hint="The list of delimiters used for the column list and column name arguments."
-			/>
-			
-		<cfargument
-			name="HeaderCSS" 
-			type="string"
-			required="false"
-			default=""
-			hint="Defines the limited CSS available for the header row (if a header row is used)."
-			/>
-			
-		<cfargument
-			name="RowCSS" 
-			type="string"
-			required="false"
-			default=""
-			hint="Defines the limited CSS available for the non-header rows."
-			/>
-			
-		<cfargument
-			name="AltRowCSS" 
-			type="string"
-			required="false"
-			default=""
-			hint="Defines the limited CSS available for the alternate non-header rows. This style overwrites parts of the RowCSS."
-			/>
-		
-		<cfscript>
-			
-			// Set up local scope.
-			var LOCAL = StructNew();
-			
-			// Create Excel workbook.
-			LOCAL.WorkBook = CreateObject( 
-				"java",
-				"org.apache.poi.hssf.usermodel.HSSFWorkbook"
-				).Init();
-				
-			// Check to see if we are dealing with an array of sheets or if we were
-			// passed in a single sheet.
-			if (IsArray( ARGUMENTS.Sheets )){
-			
-				// This is an array of sheets. We are going to write each one of them
-				// as a tab to the Excel file. Loop over the sheet array to create each 
-				// sheet for the already created workbook.
+						LOCAL.ColumnName = LOCAL.Row.GetCell( JavaCast( "int", LOCAL.ColumnIndex ) ).GetStringCellValue();
+						ArrayAppend(LOCAL.SheetData.COLUMNNAMES, LOCAL.ColumnName );
+						QueryAddColumn(
+							LOCAL.SheetData.Query,
+							LOCAL.ColumnName,
+							"CF_SQL_VARCHAR",
+							ArrayNew(1)
+							);
+					}
+					continue;
+			}else if ( ARGUMENTS.HasHeaderRow AND LOCAL.RowIndex GT ARGUMENTS.HeaderRowStart AND LOCAL.RowIndex LT ARGUMENTS.DataRowStart ){
+				//Skip the between
+				continue;
+			}else if( ! ARGUMENTS.HasHeaderRow AND LOCAL.RowIndex EQ Arguments.DataRowStart ){
+				//no header row so create the dummy columns and add another empty row
 				for (
-					LOCAL.SheetIndex = 1 ;
-					LOCAL.SheetIndex LTE ArrayLen( ARGUMENTS.Sheets ) ;
-					LOCAL.SheetIndex = (LOCAL.SheetIndex + 1)
+						LOCAL.ColumnIndex = LOCAL.startCol;
+						LOCAL.ColumnIndex LT LOCAL.lastCol;
+						LOCAL.ColumnIndex = (LOCAL.ColumnIndex + 1)
+						){
+						
+						LOCAL.ColumnName = "column#LOCAL.ColumnIndex + LOCAL.startCol#";
+						ArrayAppend(LOCAL.SheetData.COLUMNNAMES, LOCAL.ColumnName );
+						QueryAddColumn(
+							LOCAL.SheetData.Query,
+							LOCAL.ColumnName,
+							"CF_SQL_VARCHAR",
+							ArrayNew(1)
+							);
+					}
+			}
+
+			QueryAddRow( LOCAL.SheetData.Query );
+
+			// Check to see if we have a row. If we requested an
+			// undefined row, then the NULL value will have
+			// destroyed our Row variable.
+			if ( StructKeyExists( LOCAL, "Row" ) ){
+
+				// Get the number of the last cell in the row. Since we
+				// are in a defined row, we know that we must have at
+				// least one row cell defined (and therefore, we must have
+				// a defined cell number).
+				LOCAL.ColumnCount = LOCAL.Row.GetLastCellNum();
+
+				// Now that we have an empty query, we are going to loop over
+				// the cells COUNT for this data row and for each cell, we are
+				// going to create a query column of type VARCHAR. I understand
+				// that cells are going to have different data types, but I am
+				// chosing to store everything as a string to make it easier.
+
+				for (
+					LOCAL.ColumnIndex =  LOCAL.startCol;
+					LOCAL.ColumnIndex LT LOCAL.lastCol;
+					LOCAL.ColumnIndex =  (LOCAL.ColumnIndex + 1)
 					){
 					
+					// Check to see if we might be dealing with a header row.
+					// This will be true if we are in the first row AND if
+					// the user had flagged the header row usage.
+					if ( ARGUMENTS.HasHeaderRow AND LOCAL.RowIndex EQ  ( ARGUMENTS.HeaderRowStart  ) ){
+
+						
+						// Try to get a header column name (it might throw
+						// an error). We want to take that cell value and
+						// add it to the array of header values that we will
+						// return with the sheet data.
+						try {
+
+							// Add the cell value to the column names.
+												
+							ArrayAppend(
+								LOCAL.SheetData.ColumnNames,
+								LOCAL.Row.GetCell( 
+								JavaCast( "int", LOCAL.ColumnIndex ) ).GetStringCellValue()
+								);
+							
+						} catch (any ErrorHeader){
+
+							// There was an error grabbing the text of the
+							// header column type. Just add an empty string
+							// to make up for it.
+							ArrayAppend(
+								LOCAL.SheetData.ColumnNames,
+								""
+								);
+						}
+
+					// We are either not using a Header row or we are no
+					// longer dealing with the first row. In either case,
+					// this data is standard cell data.
+					} else {
+
+						// When getting the value of a cell, it is important to know
+						// what type of cell value we are dealing with. If you try
+						// to grab the wrong value type, an error might be thrown.
+						// For that reason, we must check to see what type of cell
+						// we are working with. These are the cell types and they
+						// are constants of the cell object itself:
+				 		//
+						// 0 - CELL_TYPE_NUMERIC
+						// 1 - CELL_TYPE_STRING
+						// 2 - CELL_TYPE_FORMULA
+						// 3 - CELL_TYPE_BLANK
+						// 4 - CELL_TYPE_BOOLEAN
+						// 5 - CELL_TYPE_ERROR
+
+						// Get the cell from the row object.
+						LOCAL.Cell = LOCAL.Row.GetCell(
+							JavaCast( "int", LOCAL.ColumnIndex )
+							);
+
+						// Check to see if we are dealing with a valid cell value.
+						// If this was an undefined cell, the GetCell() will
+						// have returned NULL which will have killed our Cell
+						// variable.
+						if (StructKeyExists( LOCAL, "Cell" )){
+
+							// ASSERT: We are definitely dealing with a valid
+							// cell which has some sort of defined value.
+
+							// Get the type of data in this cell.
+
+							//4.2 getCellType is deprecated
+							LOCAL.CellType = LOCAL.Cell.GetCellType();
+
+							// Get the value of the cell based on the data type. The thing
+							// to worry about here is cell forumlas and cell dates. Formulas
+							// can be strange and dates are stored as numeric types. For
+							// this demo, I am not going to worry about that at all. I will
+							// just grab dates as floats and formulas I will try to grab as
+							// numeric values.
 					
-					// Create sheet for the given query information..
-					WriteExcelSheet(
-						WorkBook = LOCAL.WorkBook,
-						Query = ARGUMENTS.Sheets[ LOCAL.SheetIndex ].Query,
-						ColumnList = ARGUMENTS.Sheets[ LOCAL.SheetIndex ].ColumnList,
-						ColumnNames = ARGUMENTS.Sheets[ LOCAL.SheetIndex ].ColumnNames,
-						SheetName = ARGUMENTS.Sheets[ LOCAL.SheetIndex ].SheetName,
-						Delimiters = ARGUMENTS.Delimiters,
-						HeaderCSS = ARGUMENTS.HeaderCSS,
-						RowCSS = ARGUMENTS.RowCSS,
-						AltRowCSS = ARGUMENTS.AltRowCSS
-						);			
-					
-				}
+							if (LOCAL.CellType EQ LOCAL.CellType.NUMERIC) {
+
+								// Get numeric cell data. This could be a standard number,
+								// could also be a date value. I am going to leave it up to
+								// the calling program to decide.
+								LOCAL.CellValue = LOCAL.Cell.GetNumericCellValue();
+
+							} else if (LOCAL.CellType EQ LOCAL.CellType.STRING){
+
+								LOCAL.CellValue = LOCAL.Cell.GetStringCellValue();
+
+							} else if (LOCAL.CellType EQ LOCAL.CellType.FORMULA){
+
+								// Since most forumlas deal with numbers, I am going to try
+								// to grab the value as a number. If that throws an error, I
+								// will just grab it as a string value.
+								try {
+
+									LOCAL.CellValue = LOCAL.Cell.GetNumericCellValue();
+
+								} catch (any Error1){
+
+									// The numeric grab failed. Try to get the value as a
+									// string. If this fails, just force the empty string.
+									try {
+
+										LOCAL.CellValue = LOCAL.Cell.GetStringCellValue();
+
+									} catch (any Error2){
+
+										// Force empty string.
+										LOCAL.CellValue = "";
+
+					 				}
+								}
+
+							} else if (LOCAL.CellType EQ LOCAL.CellType.BLANK){
+
+								LOCAL.CellValue = "";
+
+							} else if (LOCAL.CellType EQ LOCAL.CellType.BOOLEAN){
+
+								LOCAL.CellValue = LOCAL.Cell.GetBooleanCellValue();
+
+							} else {
+
+								// If all else fails, get empty string.
+								LOCAL.CellValue = "";
+
+							}
+
+							// ASSERT: At this point, we either got the cell value out of the
+							// Excel data cell or we have thrown an error or didn't get a
+							// matching type and just have the empty string by default.
+							// No matter what, the object LOCAL.CellValue is defined and
+							// has some sort of SIMPLE ColdFusion value in it.
+
+
+							// Now that we have a value, store it as a string in the ColdFusion
+							// query object. Remember again that my query names are ONE based
+							// for ColdFusion standards. That is why I am adding 1 to the
+							// cell index.
+
+							//We need to subtract the local.startCol from the index 
+							LOCAL.adjColumnIndex = LOCAL.ColumnIndex + 1 - Local.startCol;
+							try{
+								LOCAL.SheetData.Query[ LOCAL.SheetData.COLUMNNAMES[ LOCAL.adjColumnIndex ] ][ LOCAL.SheetData.Query.RecordCount  ] = JavaCast( "string", LOCAL.CellValue );
+							}catch(any e){
+								//writeDump(LOCAL);
+								//WriteDump(e);
+							}
+						}
+
+					}
+
+				} 
+				
+			}
 			
-			} else {
-			
-				// We were passed in a single sheet object. Write this sheet as the 
-				// first and only sheet in the already created workbook.
+		}
+
+		// Return the sheet object that contains all the Excel data.
+		return( LOCAL.SheetData );
+	}
+
+	/**
+	* @hint Takes an array of 'Sheet' structure objects and writes each of them to a tab in the Excel file.
+	* @FilePath This is the expanded path of the Excel file.
+	* @Sheets This is an array of the data that is needed for each sheet of the excel OR it is a single Sheet object. Each 'Sheet' will be a structure containing the Query, ColumnList, ColumnNames, and SheetName.
+	* @Delimiters The list of delimiters used for the column list and column name arguments.
+	* @HeaderCSS Defines the limited CSS available for the header row (if a header row is used).
+	* @RowCSS Defines the limited CSS available for the non-header rows.
+	* @AltRowCSS Defines the limited CSS available for the alternate non-header rows. This style overwrites parts of the RowCSS.
+	* @output false
+	*/
+	public void function WriteExcel(required string FilePath, required any Sheets,
+		string Delimiters=",", string HeaderCSS="", string RowCSS="", string AltRowCSS="" ){
+
+		//TODO Javaloader and create workbook
+		// Create Excel workbook.
+		LOCAL.WBObjects = GetPOIWorkBookObjects( FilePath=ARGUMENTS.FilePath, type="write", createCSSRule=true );
+
+
+		// Check to see if we are dealing with an array of sheets or if we were
+		// passed in a single sheet.
+		if (IsArray( ARGUMENTS.Sheets )){
+
+			// This is an array of sheets. We are going to write each one of them
+			// as a tab to the Excel file. Loop over the sheet array to create each
+			// sheet for the already created workbook.
+			for (
+				LOCAL.SheetIndex = 1 ;
+				LOCAL.SheetIndex LTE ArrayLen( ARGUMENTS.Sheets ) ;
+				LOCAL.SheetIndex = (LOCAL.SheetIndex + 1)
+				){
+
+
+				// Create sheet for the given query information..
 				WriteExcelSheet(
-					WorkBook = LOCAL.WorkBook,
-					Query = ARGUMENTS.Sheets.Query,
-					ColumnList = ARGUMENTS.Sheets.ColumnList,
-					ColumnNames = ARGUMENTS.Sheets.ColumnNames,
-					SheetName = ARGUMENTS.Sheets.SheetName,
+					WorkBook = LOCAL.WBObjects.WorkBook,
+					CSSRule =  LOCAL.WBObjects.CSSRule,
+					Query = ARGUMENTS.Sheets[ LOCAL.SheetIndex ].Query,
+					ColumnList = ARGUMENTS.Sheets[ LOCAL.SheetIndex ].ColumnList,
+					ColumnNames = ARGUMENTS.Sheets[ LOCAL.SheetIndex ].ColumnNames,
+					SheetName = ARGUMENTS.Sheets[ LOCAL.SheetIndex ].SheetName,
 					Delimiters = ARGUMENTS.Delimiters,
 					HeaderCSS = ARGUMENTS.HeaderCSS,
 					RowCSS = ARGUMENTS.RowCSS,
 					AltRowCSS = ARGUMENTS.AltRowCSS
-					);		
-			
-			}
-			
-			
-			// ASSERT: At this point, either we were passed a single Sheet object
-			// or we were passed an array of sheets. Either way, we now have all
-			// of sheets written to the WorkBook object.
-			
-		
-			// Create a file based on the path that was passed in. We will stream 
-			// the work data to the file via a file output stream.
-			LOCAL.FileOutputStream = CreateObject(
-				"java",
-				"java.io.FileOutputStream"
-				).Init(
-				
-					JavaCast( 
-						"string", 
-						ARGUMENTS.FilePath
-						)
-						
 					);
-			
-			// Write the workout data to the file stream.
-			LOCAL.WorkBook.Write( 
-				LOCAL.FileOutputStream 
+
+			}
+
+		} else {
+
+			// We were passed in a single sheet object. Write this sheet as the
+			// first and only sheet in the already created workbook.
+			WriteExcelSheet(
+				WorkBook = LOCAL.WBObjects.WorkBook,
+				CSSRule =  LOCAL.WBObjects.CSSRule,
+				Query = ARGUMENTS.Sheets.Query,
+				ColumnList = ARGUMENTS.Sheets.ColumnList,
+				ColumnNames = ARGUMENTS.Sheets.ColumnNames,
+				SheetName = ARGUMENTS.Sheets.SheetName,
+				Delimiters = ARGUMENTS.Delimiters,
+				HeaderCSS = ARGUMENTS.HeaderCSS,
+				RowCSS = ARGUMENTS.RowCSS,
+				AltRowCSS = ARGUMENTS.AltRowCSS
 				);
-		
-			// Close the file output stream. This will release any locks on 
-			// the file and finalize the process.
-			LOCAL.FileOutputStream.Close();
-	
-			// Return out.
-			return;
-		
-		</cfscript>
-	</cffunction>
-	
-	
-	<cffunction name="WriteExcelSheet" access="public" returntype="void" output="false"
-		hint="Writes the given 'Sheet' structure to the given workbook.">
-		
-		<!--- Define arguments. --->
-		<cfargument 
-			name="WorkBook" 
-			type="any" 
-			required="true" 
-			hint="This is the Excel workbook that will create the sheets."
-			/>
-			
-		<cfargument 
-			name="Query" 
-			type="any" 
-			required="true" 
-			hint="This is the query from which we will get the data."
-			/>
-			
-		<cfargument 
-			name="ColumnList" 
-			type="string" 
-			required="false" 
-			default="#ARGUMENTS.Query.ColumnList#" 
-			hint="This is list of columns provided in custom-ordered."
-			/>
-			
-		<cfargument 
-			name="ColumnNames" 
-			type="string" 
-			required="false" 
-			default="" 
-			hint="This the the list of optional header-row column names. If this is not provided, no header row is used."
-			/>
-			
-		<cfargument 
-			name="SheetName" 
-			type="string" 
-			required="false" 
-			default="Sheet #(ARGUMENTS.WorkBook.GetNumberOfSheets() + 1)#"
-			hint="This is the optional name that appears in this sheet's tab."
-			/>
-			
-		<cfargument 
-			name="Delimiters" 
-			type="string" 
-			required="false" 
-			default="," 
-			hint="The list of delimiters used for the column list and column name arguments."
-			/>
-			
-		<cfargument
-			name="HeaderCSS" 
-			type="string"
-			required="false"
-			default=""
-			hint="Defines the limited CSS available for the header row (if a header row is used)."
-			/>
-			
-		<cfargument
-			name="RowCSS" 
-			type="string"
-			required="false"
-			default=""
-			hint="Defines the limited CSS available for the non-header rows."
-			/>
-			
-		<cfargument
-			name="AltRowCSS" 
-			type="string"
-			required="false"
-			default=""
-			hint="Defines the limited CSS available for the alternate non-header rows. This style overwrites parts of the RowCSS."
-			/>
-		
-		<cfscript>
-			
-			// Set up local scope.
-			var LOCAL = StructNew();
-		
-			// Set up data type map so that we can map each column name to 
+
+		}
+
+
+		// ASSERT: At this point, either we were passed a single Sheet object
+		// or we were passed an array of sheets. Either way, we now have all
+		// of sheets written to the WorkBook object.
+
+
+		// Create a file based on the path that was passed in. We will stream
+		// the work data to the file via a file output stream.
+		LOCAL.FileOutputStream = CreateObject(
+			"java",
+			"java.io.FileOutputStream"
+			).Init(
+
+				JavaCast(
+					"string",
+					ARGUMENTS.FilePath
+					)
+
+				);
+
+		// Write the workout data to the file stream.
+		LOCAL.WBObjects.WorkBook.Write(
+			LOCAL.FileOutputStream
+			);
+
+		// Close the file output stream. This will release any locks on
+		// the file and finalize the process.
+		LOCAL.FileOutputStream.Close();
+
+		// Return out.
+		return;
+
+
+	}
+
+	/**
+	* @hint Writes the given 'Sheet' structure to the given workbook
+	* @WorkBook This is the Excel workbook that will create the sheets
+	* @CSSRule  our very own CSSRule magic
+	* @Query This is the query from which we will get the data
+	* @ColumnList This is list of columns provided in custom-ordered
+	* @ColumnNames This the the list of optional header-row column names. If this is not provided, no header row is used."
+	* @SheetName This is the optional name that appears in this sheet's tab
+	* @Delimiters The list of delimiters used for the column list and column name arguments.
+	* @HeaderCSS Defines the limited CSS available for the header row (if a header row is used)
+	* @RowCSS Defines the limited CSS available for the non-header rows
+	* @AltRowCSS Defines the limited CSS available for the alternate non-header rows. This style overwrites parts of the RowCSS
+	* output false
+	*/
+	public void function WriteExcelSheet(required any WorkBook, required any CSSRule, required any Query,
+		                                string ColumnList=ARGUMENTS.Query.ColumnList,
+		                                string ColumnNames="",
+		                                string SheetName="Sheet #(ARGUMENTS.WorkBook.GetNumberOfSheets() + 1)#"
+		                                string Delimiters=",", 
+		                                string HeaderCSS="", string RowCSS="", string AltRowCSS=""){
+
+			// Set up data type map so that we can map each column name to
 			// the type of data contained.
-			LOCAL.DataMap = StructNew();
-			
+			LOCAL.DataMap = {};
+
 			// Get the meta data of the query to help us create the data mappings.
-			LOCAL.MetaData = GetMetaData( ARGUMENTS.Query ); 
-				
+			LOCAL.MetaData = GetMetaData( ARGUMENTS.Query );
+
 			// Loop over meta data values to set up the data mapping.
 			for (
-				LOCAL.MetaIndex = 1 ; 
+				LOCAL.MetaIndex = 1 ;
 				LOCAL.MetaIndex LTE ArrayLen( LOCAL.MetaData ) ;
 				LOCAL.MetaIndex = (LOCAL.MetaIndex + 1)
 				){
-				
+
 				// Map the column name to the data type.
 				LOCAL.DataMap[ LOCAL.MetaData[ LOCAL.MetaIndex ].Name ] = LOCAL.MetaData[ LOCAL.MetaIndex ].TypeName;
 			}
-			
-			
-			// Create standardized header CSS by parsing the raw header css.
-			LOCAL.HeaderCSS = ParseRawCSS( ARGUMENTS.HeaderCSS );
-			
-			// Get the header style object based on the CSS.
-			LOCAL.HeaderStyle = GetCellStyle( 
-				WorkBook = ARGUMENTS.WorkBook,
-				CSS = LOCAL.HeaderCSS 
+
+			//default cell style
+			LOCAL.Classes[ "@cell" ] = ARGUMENTS.CSSRule.AddCSS(
+			StructNew(),
+			ARGUMENTS.RowCSS
+			) ;
+
+			LOCAL.HeaderStyle = ARGUMENTS.WorkBook.CreateCellStyle();
+			LOCAL.HeaderCSS = ARGUMENTS.CSSRule.AddCSS(LOCAL.Classes,ARGUMENTS.HeaderCSS );
+			LOCAL.HeaderStyle = ARGUMENTS.CSSRule.ApplyToCellStyle(
+				LOCAL.HeaderCSS,
+				ARGUMENTS.Workbook,
+				LOCAL.HeaderStyle
 				);
-				
-			
-			// Create standardized row CSS by parsing the raw row css.
-			LOCAL.RowCSS = ParseRawCSS( ARGUMENTS.RowCSS );
-			
-			// Get the row style object based on the CSS.
-			LOCAL.RowStyle = GetCellStyle( 
-				WorkBook = ARGUMENTS.WorkBook,
-				CSS = LOCAL.RowCSS 
+ 
+ 			LOCAL.RowStyle = ARGUMENTS.WorkBook.CreateCellStyle();
+			LOCAL.RowCSS = ARGUMENTS.CSSRule.AddCSS(LOCAL.Classes,ARGUMENTS.RowCSS );
+			LOCAL.RowStyle = ARGUMENTS.CSSRule.ApplyToCellStyle(
+				LOCAL.RowCSS,
+				ARGUMENTS.Workbook,
+				LOCAL.RowStyle
 				);
-				
-				
-			// Create standardized alt-row CSS by parsing the raw alt-row css.
-			LOCAL.AltRowCSS = ParseRawCSS( ARGUMENTS.AltRowCSS );
-			
+
+			LOCAL.AltRowStyle = ARGUMENTS.WorkBook.CreateCellStyle();
+			LOCAL.AltRowCSS = ARGUMENTS.CSSRule.AddCSS(LOCAL.Classes,ARGUMENTS.AltRowCSS );
+
+	
 			// Now, loop over alt row css and check for values. If there are not
-			// values (no length), then overwrite the alt row with the standard 
-			// row. This is a round-about way of letting the alt row override 
+			// values (no length), then overwrite the alt row with the standard
+			// row. This is a round-about way of letting the alt row override
 			// the standard row.
 			for (LOCAL.Key in LOCAL.AltRowCSS){
-				
+
 				// Check for value.
-				if (NOT Len( LOCAL.AltRowCSS[ LOCAL.Key ] )){
-				
+				if ( LOCAL.Key neq "@cell" AND NOT Len( LOCAL.AltRowCSS[ LOCAL.Key ] )){
+
 					// Since we don't have an alt row style, copy over the standard
 					// row style's value for this key.
 					LOCAL.AltRowCSS[ LOCAL.Key ] = LOCAL.RowCSS[ LOCAL.Key ];
-				
+
 				}
-			
+
 			}
-							
-			// Get the alt-row style object based on the CSS.
-			LOCAL.AltRowStyle = GetCellStyle( 
-				WorkBook = ARGUMENTS.WorkBook,
-				CSS = LOCAL.AltRowCSS 
+
+			LOCAL.AltRowStyle = ARGUMENTS.CSSRule.ApplyToCellStyle(
+				LOCAL.AltRowCSS,
+				ARGUMENTS.Workbook,
+				LOCAL.AltRowStyle
 				);
-			
-		
+
+
 			// Create the sheet in the workbook.
 			LOCAL.Sheet = ARGUMENTS.WorkBook.CreateSheet(
-				JavaCast( 
+				JavaCast(
 					"string",
 					ARGUMENTS.SheetName
 					)
 				);
-				
+
 			// Set the sheet's default column width.
 			LOCAL.Sheet.SetDefaultColumnWidth(
 				JavaCast( "int", 23 )
 				);
-				
-				
-			// Set a default row offset so that we can keep add the header 
+
+
+			// Set a default row offset so that we can keep add the header
 			// column without worrying about it later.
 			LOCAL.RowOffset = -1;
-				
-			// Check to see if we have any column names. If we do, then we 
-			// are going to create a header row with these names in order 
+
+			// Check to see if we have any column names. If we do, then we
+			// are going to create a header row with these names in order
 			// based on the passed in delimiter.
 			if (Len( ARGUMENTS.ColumnNames )){
-			
+
 				// Convert the column names to an array for easier
 				// indexing and faster access.
 				LOCAL.ColumnNames = ListToArray(
 					ARGUMENTS.ColumnNames,
 					ARGUMENTS.Delimiters
 					);
-					
+
 				// Create a header row.
 				LOCAL.Row = LOCAL.Sheet.CreateRow(
 					JavaCast( "int", 0 )
 					);
-					
+
 				// Set the row height.
 				/*
 				LOCAL.Row.SetHeightInPoints(
 					JavaCast( "float", 14 )
 					);
 				*/
-			
-			
+
+
 				// Loop over the column names.
 				for (
-					LOCAL.ColumnIndex = 1 ; 
+					LOCAL.ColumnIndex = 1 ;
 					LOCAL.ColumnIndex LTE ArrayLen( LOCAL.ColumnNames ) ;
 					LOCAL.ColumnIndex = (LOCAL.ColumnIndex + 1)
 					){
-				
+
 					// Create a cell for this column header.
 					LOCAL.Cell = LOCAL.Row.CreateCell(
 						JavaCast( "int", (LOCAL.ColumnIndex - 1) )
 						);
-					
+
 					// Set the cell value.
 					LOCAL.Cell.SetCellValue(
-						JavaCast( 
-							"string", 
+						JavaCast(
+							"string",
 							LOCAL.ColumnNames[ LOCAL.ColumnIndex ]
 							)
 						);
-						
+
 					// Set the header cell style.
-					LOCAL.Cell.SetCellStyle( 
-						LOCAL.HeaderStyle 
+					LOCAL.Cell.SetCellStyle(
+						LOCAL.HeaderStyle
 						);
-					
+
 				}
-				
-				// Set the row offset to zero since this will take care of 
+
+				// Set the row offset to zero since this will take care of
 				// the zero-based index for the rest of the query records.
 				LOCAL.RowOffset = 0;
-			
+
 			}
-			
-			// Convert the list of columns to the an array for easier 
+
+			// Convert the list of columns to the an array for easier
 			// indexing and faster access.
 			LOCAL.Columns = ListToArray(
 				ARGUMENTS.ColumnList,
 				ARGUMENTS.Delimiters
 				);
-				
+
 			// Loop over the query records to add each one to the
 			// current sheet.
 			for (
@@ -1678,219 +931,150 @@
 				LOCAL.RowIndex LTE ARGUMENTS.Query.RecordCount ;
 				LOCAL.RowIndex = (LOCAL.RowIndex + 1)
 				){
-				
+
 				// Create a row for this query record.
 				LOCAL.Row = LOCAL.Sheet.CreateRow(
-					JavaCast( 
+					JavaCast(
 						"int",
 						(LOCAL.RowIndex + LOCAL.RowOffset)
 						)
 					);
-					
+
 				/*
 				// Set the row height.
 				LOCAL.Row.SetHeightInPoints(
 					JavaCast( "float", 14 )
 					);
 				*/
-				
-					
-				// Loop over the columns to create the individual data cells 
+
+
+				// Loop over the columns to create the individual data cells
 				// and set the values.
 				for (
-					LOCAL.ColumnIndex = 1 ; 
+					LOCAL.ColumnIndex = 1 ;
 					LOCAL.ColumnIndex LTE ArrayLen( LOCAL.Columns ) ;
 					LOCAL.ColumnIndex = (LOCAL.ColumnIndex + 1)
 					){
-					
+
 					// Create a cell for this query cell.
 					LOCAL.Cell = LOCAL.Row.CreateCell(
 						JavaCast( "int", (LOCAL.ColumnIndex - 1) )
 						);
-					
+
 					// Get the generic cell value (short hand).
-					LOCAL.CellValue = ARGUMENTS.Query[ 
+					LOCAL.CellValue = ARGUMENTS.Query[
 						LOCAL.Columns[ LOCAL.ColumnIndex ]
 						][ LOCAL.RowIndex ];
-					
-					// Check to see how we want to set the value. Meaning, what 
-					// kind of data mapping do we want to apply? Get the data 
+
+					// Check to see how we want to set the value. Meaning, what
+					// kind of data mapping do we want to apply? Get the data
 					// mapping value.
 					LOCAL.DataMapValue = LOCAL.DataMap[ LOCAL.Columns[ LOCAL.ColumnIndex ] ];
-					
-					// Check to see what value type we are working with. I am 
-					// not sure what the set of values are, so trying to keep 
+
+					// Check to see what value type we are working with. I am
+					// not sure what the set of values are, so trying to keep
 					// it general.
 					if (REFindNoCase( "int", LOCAL.DataMapValue )){
-						
+
 						LOCAL.DataMapCast = "int";
-						
+
 					} else if (REFindNoCase( "long", LOCAL.DataMapValue )){
-					
+
 						LOCAL.DataMapCast = "long";
-						
+
 					} else if (REFindNoCase( "double|decimal|numeric", LOCAL.DataMapValue )){
-					
+
 						LOCAL.DataMapCast = "double";
-					
+
 					} else if (REFindNoCase( "float|real|date|time", LOCAL.DataMapValue )){
-					
+
 						LOCAL.DataMapCast = "float";
-						
+
 					} else if (REFindNoCase( "bit", LOCAL.DataMapValue )){
-					
+
 						LOCAL.DataMapCast = "boolean";
-						
+
 					} else if (REFindNoCase( "char|text|memo", LOCAL.DataMapValue )){
-					
+
 						LOCAL.DataMapCast = "string";
-						
+
 					} else if (IsNumeric( LOCAL.CellValue )){
-					
+
 						LOCAL.DataMapCast = "float";
-					
+
 					} else {
-					
+
 						LOCAL.DataMapCast = "string";
-						
+
 					}
-					
-					// Set the cell value using the data map casting that we 
-					// just determined and the value that we previously grabbed 
+
+					// Set the cell value using the data map casting that we
+					// just determined and the value that we previously grabbed
 					// (for short hand).
 					//
 					// NOTE: Only set the cell value if we have a length. This
 					// will stop us from improperly attempting to cast NULL values.
 					if (Len( LOCAL.CellValue )){
-					
+
 						LOCAL.Cell.SetCellValue(
 							JavaCast(
 								LOCAL.DataMapCast,
 								LOCAL.CellValue
 								)
 							);
-							
 					}
-						
-						
-					// Get a pointer to the proper cell style. Check to see if we 
+
+					// Get a pointer to the proper cell style. Check to see if we
 					// are in an alternate row.
 					if (LOCAL.RowIndex MOD 2){
-					
+
 						// Set standard row style.
-						LOCAL.Cell.SetCellStyle( 
+						LOCAL.Cell.SetCellStyle(
 							LOCAL.RowStyle
 							);
-						
+
 					} else {
-					
+
 						// Set alternate row style.
-						LOCAL.Cell.SetCellStyle( 
+						LOCAL.Cell.SetCellStyle(
 							LOCAL.AltRowStyle
 							);
-						
+
 					}
-										
+
 				}
-				
+
 			}
-			
-			
+
+
 			// Return out.
 			return;
-		
-		</cfscript>		
-	</cffunction>
-	
-	
-	<cffunction name="WriteSingleExcel" access="public" returntype="void" output="false"
-		hint="Write the given query to an Excel file.">
-		
-		<!--- Define arguments. --->
-		<cfargument 
-			name="FilePath" 
-			type="string" 
-			required="true" 
-			hint="This is the expanded path of the Excel file."
-			/>
+
+
+	}
+	/**
+	* @hint Write the given query to an Excel file.
+	* @output false
+	* @FilePath expanded path of the excel file
+	* @query This is the query from which we will get the data for the Excel file
+	* @ColumnList This is list of columns provided in custom-order
+	* @ColumnNames This the the list of optional header-row column names. If this is not provided, no header row is used
+	* @SheetName This is the optional name that appears in the first (and only) workbook tab.
+	* @Delimiters The list of delimiters used for the column list and column name arguments.
+	* @HeaderCSS Defines the limited CSS available for the header row (if a header row is used)
+	* @RowCSS Defines the limited CSS available for the non-header rows.
+	* @AltRowCSS Defines the limited CSS available for the alternate non-header rows. This style overwrites parts of the RowCSS
+	*/
+	public void function WriteSingleExcel( required string FilePath, required query Query
+											, string ColumnList=ARGUMENTS.Query.ColumnList
+											, string ColumnNames="", string Sheetname="Sheet 1"
+											, string Delimiters=",", string HeaderCSS="", string RowCSS="", string AltRowCSS=""){
 			
-		<cfargument 
-			name="Query" 
-			type="query" 
-			required="true" 
-			hint="This is the query from which we will get the data for the Excel file."
-			/>
 			
-		<cfargument 
-			name="ColumnList" 
-			type="string" 
-			required="false" 
-			default="#ARGUMENTS.Query.ColumnList#" 
-			hint="This is list of columns provided in custom-order."
-			/>
-			
-		<cfargument 
-			name="ColumnNames" 
-			type="string" 
-			required="false" 
-			default="" 
-			hint="This the the list of optional header-row column names. If this is not provided, no header row is used."
-			/>
-			
-		<cfargument 
-			name="SheetName" 
-			type="string" 
-			required="false" 
-			default="Sheet 1"
-			hint="This is the optional name that appears in the first (and only) workbook tab."
-			/>
-			
-		<cfargument 
-			name="Delimiters" 
-			type="string" 
-			required="false" 
-			default="," 
-			hint="The list of delimiters used for the column list and column name arguments."
-			/>
-			
-		<cfargument
-			name="HeaderCSS" 
-			type="string"
-			required="false"
-			default=""
-			hint="Defines the limited CSS available for the header row (if a header row is used)."
-			/>
-			
-		<cfargument
-			name="RowCSS" 
-			type="string"
-			required="false"
-			default=""
-			hint="Defines the limited CSS available for the non-header rows."
-			/>
-			
-		<cfargument
-			name="AltRowCSS" 
-			type="string"
-			required="false"
-			default=""
-			hint="Defines the limited CSS available for the alternate non-header rows. This style overwrites parts of the RowCSS."
-			/>
-		
-		<cfscript>
-			
-			// Set up local scope.
-			var LOCAL = StructNew();
-			
+
 			// Get a new sheet object.
-			LOCAL.Sheet = GetNewSheetStruct();
-			
-			// Set the sheet properties.
-			LOCAL.Sheet.Query = ARGUMENTS.Query;
-			LOCAL.Sheet.ColumnList = ARGUMENTS.ColumnList;
-			LOCAL.Sheet.ColumnNames = ARGUMENTS.ColumnNames;
-			LOCAL.Sheet.SheetName = ARGUMENTS.SheetName;
-			
+			LOCAL.Sheet = GetNewSheetStruct( ARGUMENTS );
+
 			// Write this sheet to an Excel file.
 			WriteExcel(
 				FilePath = ARGUMENTS.FilePath,
@@ -1900,18 +1084,79 @@
 				RowCSS = ARGUMENTS.RowCSS,
 				AltRowCSS = ARGUMENTS.AltRowCSS
 				);
-			
+
 			// Return out.
 			return;
-			
-		</cfscript>	
-	</cffunction>
+
+
+	}
+
+
+	/**
+	* @hint Returns a default structure of what this Component is expecting for a sheet definition when WRITING Excel files
+	* @output false
+	*/
+	public struct function GetNewSheetStruct( ){
+
+		LOCAL.result = {Query = "",ColumnList="",ColumnNames="",SheetName="" };
+		
+		for(LOCAL.prop in ARGUMENTS){
+			if( StructKeyExists( LOCAL.result, LOCAL.prop ) ){
+				LOCAL.result[prop] = ARGUMENTS[prop];
+			}
+		}
 	
-	
-	
-	<cffunction name="Debug">
-		<cfdump var="#ARGUMENTS#" />
-		<cfabort />
-	</cffunction>
-	
-</cfcomponent>
+		return LOCAL.result;
+	}
+
+	public struct function Debug (){
+		writeDump(ARGUMENTS);
+		abort;
+	}
+
+	public numeric function findLastRowWithData(required any Sheet, 
+		required numeric RowStart, required numeric RowEnd,
+		required numeric ColStart, required numeric ColEnd ){
+
+		LOCAL.hasData = false;
+		/** Get last row is problematic in that it can see formerly used row as a last row.
+		* the idea here is to take the value what POI thinks is a last row and then iterate
+		* backwards to find the first non-null row and return that.
+		*/
+		for(local.rowIndex = ARGUMENTS.RowEnd; local.rowIndex GTE ARGUMENTS.RowStart; local.rowIndex -= 1 ){
+			//sheet get row reference
+			// Get a reference to the current row.
+			LOCAL.Row = ARGUMENTS.Sheet.GetRow(
+				JavaCast( "int", LOCAL.RowIndex )
+				);
+
+			LOCAL.hasCells = false;
+			for( local.colIndex = ARGUMENTS.ColEnd; local.colIndex GTE ARGUMENTS.ColStart; local.colIndex -= 1){
+
+				// Get the cell from the row object.
+				LOCAL.Cell = LOCAL.Row.GetCell(
+					JavaCast( "int", LOCAL.colIndex )
+					);
+				if (StructKeyExists( LOCAL, "Cell" )){
+					
+					//4.2 getCellType is deprecated
+					LOCAL.CellType = LOCAL.Cell.GetCellType();
+					if ( LOCAL.Cell.getCellType()  neq LOCAL.CellType.BLANK ){
+						LOCAL.hasCells = true;
+					}
+					
+
+				}
+				
+			}	
+			if ( LOCAL.hasCells ){
+				return local.rowIndex;
+			}	
+		}
+
+
+
+		return -1;
+	}
+
+}

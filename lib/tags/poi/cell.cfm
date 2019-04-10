@@ -421,6 +421,7 @@
 					<!--- Use the user-defined format. --->
 					 <cfset VARIABLES.CellStyle.SetDataFormat( VARIABLES.DocumentTag.DataFormat.getFormat( JavaCast( "string", ATTRIBUTES.DateFormat ) ) )>
 					 <!--->
+					 <!--- TODO: verify the date format --->
 					<cfif VARIABLES.DocumentTag.ISXLSX>
 						<cfset VARIABLES.CellStyle.SetDataFormat(
 						VARIABLES.DocumentTag.DataFormat.getFormat(

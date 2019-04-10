@@ -142,28 +142,28 @@ component  {
 		*/
 		VARIABLES.CSSValidation = {
 		"background-attachment" = "scroll|fixed",
-		"background-color" = "\w+|##[0-9ABCDEF]{6}",
+		"background-color" = "[0-9A-Za-z_]+|##[0-9ABCDEF]{6}",
 		"background-image" = "url\([^\)]+\)",
 		"background-pattern" = ".*",
 		"background-position" = "(top|right|bottom|left|\d+(\.\d+)?(px|%|em)) (top|right|bottom|left|\d+(\.\d+)?(px|%|em))",
 		"background-repeat" = "(no-)?repeat(-x|-y)?",
 		"border-top-width" = "\d+(\.\d+)?px",
-		"border-color" = "\w+|##[0-9ABCDEF]{6}",
-		"border-top-color" = "\w+|##[0-9ABCDEF]{6}",
+		"border-color" = "[0-9A-Za-z_]+|##[0-9ABCDEF]{6}",
+		"border-top-color" = "[0-9A-Za-z_]+|##[0-9ABCDEF]{6}",
 		"border-style" = "dashed|dash_dot|dash_dot_dot|dotted|double|hair|medium|medium_dashed|medium_dash_dot|medium_dash_dot_dot|none|thick|thin",
 		"border-top-style" = "dashed|dash_dot|dash_dot_dot|dotted|double|hair|medium|medium_dashed|medium_dash_dot|medium_dash_dot_dot|none|thick|thin",
 		"border-width" = "\d+(\.\d+)?px",
 		"border-right-width" = "\d+(\.\d+)?px",
-		"border-right-color" = "\w+|##[0-9ABCDEF]{6}",
+		"border-right-color" = "[0-9A-Za-z_]+|##[0-9ABCDEF]{6}",
 		"border-right-style" = "dashed|dash_dot|dash_dot_dot|dotted|double|hair|medium|medium_dashed|medium_dash_dot|medium_dash_dot_dot|none|thick|thin",
 		"border-bottom-width" = "\d+(\.\d+)?px",
-		"border-bottom-color" = "\w+|##[0-9ABCDEF]{6}",
+		"border-bottom-color" = "[0-9A-Za-z_]+|##[0-9ABCDEF]{6}",
 		"border-bottom-style" = "dashed|dash_dot|dash_dot_dot|dotted|double|hair|medium|medium_dashed|medium_dash_dot|medium_dash_dot_dot|none|thick|thin",
 		"border-left-width" = "\d+(\.\d+)?px",
-		"border-left-color" = "\w+|##[0-9ABCDEF]{6}",
+		"border-left-color" = "[0-9A-Za-z_]+|##[0-9ABCDEF]{6}",
 		"border-left-style" = "dashed|dash_dot|dash_dot_dot|dotted|double|hair|medium|medium_dashed|medium_dash_dot|medium_dash_dot_dot|none|thick|thin",
 		"bottom" = "-?\d+(\.\d+)?px",
-		"color" = "\w+|##[0-9ABCDEF]{6}",
+		"color" = "[0-9A-Za-z_]+|##[0-9ABCDEF]{6}",
 		"display" = "inline|block|block",
 		"font-family" = "((\w+|""[^""]""+)(\s*,\s*)?)+",
 		"font-size" = "\d+(\.\d+)?(px|pt|em|%)",
@@ -720,6 +720,7 @@ component  {
 			the text wrap.
 		*/
 
+
 		switch("#LOCAL.PropertyMap[ 'white-space' ]#"){
 			case "nowrap":
 			case "pre":
@@ -774,7 +775,7 @@ component  {
 			Return whether it validates. If the property is not
 			valid, we are returning false (same as an invalid value).
 		*/
-		return true;
+		
 		return (
 			StructKeyExists( VARIABLES.CSS, ARGUMENTS.Property ) AND
 			REFind( "(?i)^#VARIABLES.CSSValidation[ ARGUMENTS.Property ]#$", ARGUMENTS.Value )
