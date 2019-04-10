@@ -9,7 +9,8 @@
 * Now Supports xlsx ( Just add an createXLSX="true" attribute in the document tag )
 * Revamped CSSRule.cfc to cfscript, added generic border style and color settings, added rowSpan, when used with colSpan, will merge regions.
 
-
+### Here is a color pattern test showing generation of both XLS and XLST
+<img src="https://github.com/wiggick/POIUtility.cfc/blob/master/docs/ugly_spreadsheet.PNG">
 
 
 # Kinky Solutions POI ColdFusion Custom Tag
