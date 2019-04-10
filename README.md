@@ -14,23 +14,28 @@ I've brought POIUtility and custom tags up to date to use the latest Apache POI 
 <img src="https://github.com/wiggick/POIUtility.cfc/blob/master/docs/ugly_spreadsheet.PNG">
 
 
-# Kinky Solutions POI ColdFusion Custom Tag
+# POIUtility.cfc
 
-by [Ben Nadel][1]
 
 The POIUtility.cfc is a ColdFusion component that helps you read Microsoft Excel files into ColdFusion 
 queries as well as convert ColdFusion queries into multi-sheet Microsoft Excel files.
 
 ## Features
 
+* Supports creation of both xls ans xlsx 
 * Optional Header Row.
-* Basic CSS style definitions for header, row, and alternating row.
+* Optional Header Start Row
+* Optional Data Start Row
+* Optional Column Start Row
+* Optional number of columns to read
+* Optional number of rows to read
+* Basic CSS style definitions for header, row, and alternating row using a CSSRule.cfc engine
 * Write single or multiple Excel sheets at one time.
 * Read entire workbook into array of sheets or read in single sheet.
 
-## POI ColdFusion Custom Tag Features
+# POI ColdFusion Custom Tag Features
 
-* Create Excel documents using ColdFusion custom tags.
+* Create Excel documents in either xls or xlsx using ColdFusion custom tags.
 * Write Excel file to file server or to a ColdFusion variable (or both).
 * CSS control at the global, column, row, and cell levels (with proper cascading).
 * Date and Number mask support.
@@ -49,6 +54,10 @@ File: [optional] If provided, will store a copy of the Excel file at the given e
 Template: [optional] If provided, this will read in and use an existing Excel file as the base for the new file (it does not affect the template, only copies it's data). 
 
 Style: [optional] Sets default CSS styles for all cells in the document.
+
+CreateXLSX: [optional] boolean if true will create xlsx (default)
+
+EvaluateFormulas: [optional] (WORK IN PROGRESS) will evaluate formulas after creation/edit.  Useful for working with templates with predefined formulas.
 
 __Note__: Name and File are optional, but ONE of them is required.
 
@@ -104,6 +113,8 @@ Freeze: [optional] Boolean value to determine if this column should be frozen in
 
 ## Row
 
+Update: [optional] When loading in a template, specifying update as true will read in the existing row of a template for cell editing
+
 Index: [optional] The zero-based index of this row. By default, this will start at zero and increment for each row. If you set this manually, all subsequent rows will start after the previous one.
 
 Class: [optional] The class names (defined above) that should be applied to this row. This can be a single class or a space-delimited list of classes (to be taken in order).
@@ -123,6 +134,8 @@ Value: [optional] The value to be used for the cell output. If this is not provi
 
 ColSpan: [optional] Defaults to one; allows you to create merged cells in a horizontal way.
 
+RowSpan: [optional] Defaults to one; allows you to create merged cells in a vertical way.  Used with ColSpan to create merged region.
+
 NumberFormat: [optional] The number mask of the numeric cell. Only a limitted number of masks are available.
 
 DateFormat: [optoinal] The date mask of the date cell. Only a limited number of masks are avilable.
@@ -133,6 +146,14 @@ Style: [optional] The CSS styles that should be applied to this cell.
 
 Alias: [optional] Creates a pointer to the given cell for use within another cell formula. When being referenced in a cell formula, use the @ sign (ex. "SUM( @Start:@End )").
 
+## CSS 
+Utility tag for accessing CSSRule methods directly.  Usefull for unit testing and iteration of styles and colors
+
+Method: the method to call (limited to specified list 
+
+Var: unused placeholder for future expansion
+
+Result: variable where the result of the method will be returned to.
 
 ## Available Number Formatting Masks
 
