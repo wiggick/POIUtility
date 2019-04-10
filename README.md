@@ -1,7 +1,7 @@
 # A fork of Ben's POI 
- This is my attempt at bringing the existing POIUtility up to date to use the latest Apache POI 4.0.1, make it not dependent on the server libraries, support both XLS and XLSX, and some new features.
-
- Currently I've finished the groundwork for the poi: tags and a revamped CSSRule.cfc.  The next step will be an upgrade of the POIUtility.cfc to integrate with the changes in the css and support XLS and XLSX.
+I've brought POIUtility and custom tags up to date to use the latest Apache POI 4.0.1, make it not dependent on the server libraries, support both XLS and XLSX, and some new features and a revamped CSSRule.cfc.  The POIUtility.cfc has been updated to use javaLoader and now uses the CSSRule for style management.  Both XLS and XLSX can be read or written.  Additional parameter support for data row start, number of rows to read, column start, and number of columns to read have been added.  It also does a hard check beyound the the get Last Row and Last cell methods, scanning the cells for non blank.  This prevents empty rows being read in the query.  
+ 
+ The query mechanism now returns the query with the proper column names if a header row is available.
 
 * Added support for Apache POI 4.0.1
 * Added  Mark Mandel's JavaLoader.cfc
