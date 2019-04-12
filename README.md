@@ -4,6 +4,8 @@ I've brought POIUtility and custom tags up to date to use the latest Apache POI 
  
  The query mechanism now returns the query with the proper column names if a header row is available.
 
+ 
+* Added comment and comment author support for cells. (4/12/2019)
 * Added support for Apache POI 4.0.1
 * Added  Mark Mandel's JavaLoader.cfc
 * hex color find nearest for xls
@@ -13,6 +15,8 @@ I've brought POIUtility and custom tags up to date to use the latest Apache POI 
 ### Here is a color pattern test showing generation of both XLS and XLST
 <img src="https://github.com/wiggick/POIUtility.cfc/blob/master/docs/ugly_spreadsheet.PNG">
 
+### Comments now supported
+<img src="https://github.com/wiggick/POIUtility.cfc/blob/master/docs/comment_support.PNG">
 
 # POIUtility.cfc
 
@@ -131,6 +135,10 @@ Type: [optional] Type of data in the cell. By default, everything is a string. C
 Index: [optional] The zero-based index of this cell. By default, this will start at zero and increment for each cell. If you set this manually, all subsequent cells in this row will start after the previous one.
 
 Value: [optional] The value to be used for the cell output. If this is not provided, then the GeneratedContent of the cell tag will be used (space between the opening and closing tags).
+
+Comment: [optional] add a comment to a cell
+
+CommentAuthor: [optional] Specify author of comment defaults to "Apache POI"
 
 ColSpan: [optional] Defaults to one; allows you to create merged cells in a horizontal way.
 
