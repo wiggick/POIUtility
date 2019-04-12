@@ -87,6 +87,8 @@
 				) />
 				
 		</cfif>
+		<!--- for creating comments --->
+		<cfset VARIABLES.DrawingPatriarch = VARIABLES.sheet.createDrawingPatriarch()>
 			
 			
 		<!---

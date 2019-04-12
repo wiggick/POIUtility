@@ -85,6 +85,18 @@
 			default=""
 			/>
 
+		<!--- add a comment to the cell --->
+		<cfparam
+			name="ATTRIBUTES.Comment"
+			type="string"
+			default=""
+			/>
+
+		<cfparam
+			name="ATTRIBUTES.CommentAuthor"
+			type="string"
+			default="Apache POI"
+			/>
 
 		<!--- If the user provided a number format, check to see if it is valid. --->
 		<cfif NOT StructKeyExists( VARIABLES.DocumentTag.NumberFormats, ATTRIBUTES.NumberFormat )>
@@ -268,7 +280,33 @@
 			JavaCast( "int", (ATTRIBUTES.Index - 1) )
 			) />
 
+		<cfif Len( Trim(ATTRIBUTES.Comment) )>
 
+			<cfset VARIABLES.anchor = VARIABLES.DocumentTag.CreationHelper.createClientAnchor()>
+
+
+			<cfset VARIABLES.anchor.setCol1( VARIABLES.cell.getColumnIndex() )>
+			<cfset VARIABLES.anchor.setCol2( VARIABLES.cell.getColumnIndex()+ 1)>
+		 	<cfset VARIABLES.anchor.setRow1( VARIABLES.SheetTag.RowIndex )>
+		 	<cfset VARIABLES.anchor.setRow2( VARIABLES.SheetTag.RowIndex + 3)>
+
+		 	<cfset VARIABLES.comment = VARIABLES.SheetTag.DrawingPatriarch.createCellComment( VARIABLES.anchor)>
+		 	<cfif Len(Attributes.CommentAuthor)>
+		 		<cfset VARIABLES.comment.setAuthor( ATTRIBUTES.CommentAuthor )>
+		 		<cfset ATTRIBUTES.Comment = Attributes.CommentAuthor & ": " & ATTRIBUTES.Comment>
+		 	</cfif>
+	
+		 	<cfset VARIABLES.commentContents = VARIABLES.DocumentTag.CreationHelper.createRichTextString( ATTRIBUTES.Comment )>
+		 	<cfif Len( ATTRIBUTES.CommentAuthor )>
+			 	<cfset VARIABLES.commentContents.applyFont( JavaCast("int", 0), JavaCast("int", len( ATTRIBUTES.CommentAuthor ) + 2 ),VARIABLES.DocumentTag.commentFont )>
+		 	</cfif>
+		 	
+		 	
+		 	<cfset VARIABLES.comment.setString( VARIABLES.commentContents )>
+		 
+		 	<cfset VARIABLES.cell.setCellComment( VARIABLES.comment )>
+
+		</cfif>
 		<!---
 			Check to make sure we have a value to output. If we don't
 			have a value, then our data type casting will error.
@@ -339,16 +377,16 @@
 							) />
 
 						<!--- The formula was invalid. Set it as a string. --->
-						<cfcatch>
+					<cfcatch>
 
-							<!---
-								Reset the cell type so that the formula does not cause
-								any errors to be thrown.
-							--->
-							<cfset VARIABLES.Cell.SetCellType( VARIABLES.Cell.CELL_TYPE_STRING ) />
+						<!---
+							Reset the cell type so that the formula does not cause
+							any errors to be thrown.
+						--->
+						<cfset VARIABLES.Cell.SetCellType( VARIABLES.Cell.CELL_TYPE_STRING ) />
 
 							<!--- Set string value. --->
-							<cfset VARIABLES.Cell.SetCellValue(
+						<cfset VARIABLES.Cell.SetCellValue(
 								JavaCast( "string", THISTAG.GeneratedContent )
 								) />
 

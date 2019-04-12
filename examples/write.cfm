@@ -6,12 +6,12 @@
 		
 	<!--- Simulate a query object. --->
 	<cf_makequery name="qGirl">
-		name|hair|best_feature
-		Julie|Blonde|Forearms
-		Lydia|Brunette|Eyes
-		Cynthia|Blonde|Eyes
+		||name||hair||best_feature||
+		|Julie|Blonde|Forearms|
+		|Lydia|Brunette|Eyes|
+		|Cynthia|Blonde|Eyes|
 	</cf_makequery>
-		
+
 		
 	<!--- 
 		Create a sheet object for this query. This will 

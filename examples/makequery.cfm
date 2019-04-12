@@ -1,4 +1,7 @@
-
+<!--- Small update to change this to a markdown table input 
+||header1||header2||
+|col1|col2|
+--->
 <!--- Kill extra space. --->
 <cfsilent>
 
@@ -39,25 +42,20 @@
 			be strings.
 		--->
 		<cfset qData = QueryNew( "" ) />
-		
-		<cfloop 
-			index="intCol"
-			from="1"
-			to="#ListLen( arrRows[ 1 ], '|' )#"
-			step="1">
-			
-			<!--- Add a column to the query. --->
+		<!--- Assertion that query will Always have a header row using || like markdown before and end 
+		of row --->
+		<cfset arrHeader=  ListtoArray(arrRows[1],"||",false)>
+		<cfloop index="idxHeader" from="1" to="#ArrayLen(arrHeader)#">
 			<cfset QueryAddColumn(
 				qData, 
-				ListGetAt( arrRows[ 1 ], intCol, "|" ),
+				arrHeader[idxHeader],
 				"CF_SQL_VARCHAR",
 				ArrayNew( 1 )
 				) />
-			
 		</cfloop>
 		
-		
 		<!--- Loop over the rest of the rows to add data. --->
+		
 		<cfloop
 			index="intRow"
 			from="2"
@@ -66,26 +64,29 @@
 			
 			<!--- Add a row to the query. --->
 			<cfset QueryAddRow( qData ) />
-			
-			<!--- Loop over columns. --->
-			<cfloop 
-				index="strCol"
-				list="#arrRows[ 1 ]#"
-				delimiters="|">
-				
-				<!--- Set cell. --->
-				<cfset qData[ strCol ][ qData.RecordCount ] = JavaCast(
-					"string",
-					ListGetAt(
-						arrRows[ intRow ],
-						ListFind( arrRows[ 1 ], strCol, "|" ),
-						"|"
-						)
-					) />
-				
+			<!--- we consider || null data at this point, and with markdown tables, each
+			row begins and ends with a |, so for the listtoArray to work we need to rip of the first and last one--->
+			<cfset cleanedRow = Mid(arrRows[intRow],2,len(arrRows[intRow]) - 2)>
+			<cfset arrRow=  ListtoArray(cleanedRow,"|",true)>
+			<!---<cfdump var="#qData.RecordCount#">
+			<cfloop from="1" to="#ArrayLen(arrHeader)#" index="idx">
+				<cfdump var="#arrHeader[idx]#">
 			</cfloop>
-						
-		</cfloop>		
+			<cfdump var="#arrHeader#">
+			<cfdump var="#arrRow#">
+			<cfabort>--->
+		
+			<cfloop index="idxColumn" from="1" to="#ArrayLen(arrHeader)#">
+				<cfset castType = (arrRow[idxColumn] eq "" ? "null" : "string" )>
+				<cfset cellValue =(arrRow[idxColumn] eq "" ? "0" : "#arrRow[ idxColumn ]#" )>
+				<!---<cfset castType ="string">--->
+				<cfset qData[ arrHeader[idxColumn] ][ qData.RecordCount ] = JavaCast(
+					castType,
+					cellValue
+					) />
+			</cfloop>
+								
+		</cfloop>	
 	
 		
 		<!--- Store the query into the caller. --->

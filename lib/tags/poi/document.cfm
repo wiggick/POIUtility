@@ -115,6 +115,8 @@
 
 		<cfset VARIABLES.WorkBookFactory = VARIABLES.javaLoader.create(  VARIABLES.workbookFactoryClass ).Init() />
 
+
+
 			<!---
 			Create the Excel workbook to which we will be writing. Check
 			to see if we are creating a totally new workbook, or if we want
@@ -130,6 +132,11 @@
 		<cfelse>
 			<cfset VARIABLES.WorkBook = VARIABLES.WorkBookFactory.Create( JavaCast( "boolean", VARIABLES.isXLSX ) )>
 		</cfif>
+		<!--- for creating comments --->
+		<cfset VARIABLES.CreationHelper = VARIABLES.WorkBook.getCreationHelper()>
+		<cfset VARIABLES.CommentFont = VARIABLES.WorkBook.createFont()>
+		<cfset VARIABLES.CommentFont.setBold( JavaCast("boolean", true) )>
+
 
 		<!---
 			Create a data formatter utility object (we will need this to
