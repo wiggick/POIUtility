@@ -76,6 +76,7 @@
 		<cfset VARIABLES.loadPaths[4] = replace( "#VARIABLES.poiPath#apache/xmlbeans-3.1.0/lib/xmlbeans-3.1.0.jar","\","/","all")>
 		<cfset VARIABLES.loadPaths[5] = replace( "#VARIABLES.poiPath#apache/poi-ooxml-schemas-4.0.1.jar","\","/","all")>
 		<cfset VARIABLES.loadPaths[6] = replace( "#VARIABLES.poiPath#apache/lib/commons-compress-1.18.jar","\","/","all")>
+		<cfset VARIABLES.loadPaths[7] = replace( "#VARIABLES.poiPath#apache/lib/commons-math3-3.6.1.jar","\","/","all")>
 
 		<cfset VARIABLES.workbookFactoryClass  = "org.apache.poi.ss.usermodel.WorkbookFactory">
 		<cfset VARIABLES.cellRegionClass       = "org.apache.poi.ss.util.CellRangeAddress">
@@ -125,10 +126,12 @@
 		
 		<cfif Len( ATTRIBUTES.Template )>
 
+
+			<cfset VARIABLES.FileInputStream = CreateObject( "java", "java.io.FileInputStream" ).Init( JavaCast( "string", ATTRIBUTES.Template ) )>
+
 			<!--- Read in existing workbook. --->
-			<cfset VARIABLES.WorkBook = VARIABLES.WorkBookFactory.Create( CreateObject( "java", "java.io.FileInputStream" ).Init(
-					JavaCast( "string", ATTRIBUTES.Template )
-					) )>
+			<cfset VARIABLES.WorkBook = VARIABLES.WorkBookFactory.Create( VARIABLES.FileInputStream )>
+
 		<cfelse>
 			<cfset VARIABLES.WorkBook = VARIABLES.WorkBookFactory.Create( JavaCast( "boolean", VARIABLES.isXLSX ) )>
 		</cfif>
@@ -239,9 +242,27 @@
 
 	<cfcase value="End">
 
+		<cfif StructKeyExists(VARIABLES,"FileInputStream") >
+			<cfset VARIABLES.FileInputStream.Close()>
+		</cfif>
+
 		<cfif ATTRIBUTES.EvaluateFormulas>
-			<cfset VARIABLES.formulaEvaluator = VARIABLES.javaLoader.create("#VARIABLES.formulaEvaluatorClass#").init()>
-			<cfset VARIABLES.formulaEvaluator.evaluateAllFormulaCells(VARIABLES.WorkBook)>
+			<cftry>
+				<cfif ATTRIBUTES.createXLSX >
+					<cfset VARIABLES.formulaEvaluator = VARIABLES.WorkBook.getCreationHelper().createFormulaEvaluator()>
+					<cfset VARIABLES.formulaEvaluator.evaluateAll()>
+				<cfelse>
+					<cfset VARIABLES.formulaEvaluator = VARIABLES.javaLoader.create("#VARIABLES.formulaEvaluatorClass#").init()>
+					<cfset VARIABLES.formulaEvaluator.evaluateAllFormulaCells(VARIABLES.WorkBook)>
+				</cfif>
+
+				<cfcatch>
+					<cfdump var="#cfcatch#">
+					<cfabort>
+				</cfcatch>
+			</cftry>
+
+
 		</cfif>
 
 

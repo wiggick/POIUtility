@@ -98,6 +98,13 @@
 			default="Apache POI"
 			/>
 
+		<!--- If true, will try and get the cell and apply value only --->
+		<cfparam
+			name="ATTRIBUTES.Update"
+			type="string"
+			default="false"
+			/>
+
 		<!--- If the user provided a number format, check to see if it is valid. --->
 		<cfif NOT StructKeyExists( VARIABLES.DocumentTag.NumberFormats, ATTRIBUTES.NumberFormat )>
 
@@ -275,10 +282,20 @@
 		--->
 
 
-		<!--- Create a cell. --->
-		<cfset VARIABLES.Cell = VARIABLES.RowTag.Row.CreateCell(
-			JavaCast( "int", (ATTRIBUTES.Index - 1) )
-			) />
+		<cfif ATTRIBUTES.Update>
+			<cfset VARIABLES.Cell = VARIABLES.RowTag.Row.GetCell(
+				JavaCast( "int", (ATTRIBUTES.Index - 1) )
+				) />
+		</cfif>
+
+
+		<cfif not StructKeyExists(VARIABLES,"Cell")>
+			<!--- Create a cell. --->
+			<cfset VARIABLES.Cell = VARIABLES.RowTag.Row.CreateCell(
+				JavaCast( "int", (ATTRIBUTES.Index - 1) )
+				) />
+			<cfset ATTRIBUTES.UPDATE = false>
+		</cfif>
 
 		<cfif Len( Trim(ATTRIBUTES.Comment) )>
 
@@ -409,6 +426,8 @@
 
 		</cfif>
 
+	<!--- bypass any formatting if we're only updating the cell value --->
+	<cfif not ATTRIBUTES.Update >
 
 
 		<!---
@@ -537,8 +556,8 @@
 		<cfset VARIABLES.Cell.SetCellStyle( VARIABLES.CellStyle ) />
 
 
-		<cfif ATTRIBUTES.ColSpan GT 1 or ATTRIBUTES.RowSpan GT 1>				 
-			 
+		<cfif ATTRIBUTES.ColSpan GT 1 or ATTRIBUTES.RowSpan GT 1>
+
 			<cfset ArrayAppend(VARIABLES.SheetTag.regions,{"row" = ( VARIABLES.SheetTag.RowIndex - 1 ),
 			 "rowspan" = ( ATTRIBUTES.RowSpan gt 1 ? VARIABLES.SheetTag.RowIndex + ATTRIBUTES.RowSpan - 2 : VARIABLES.SheetTag.RowIndex - 1),
 			 "col" = ( ATTRIBUTES.Index - 1),
@@ -553,12 +572,12 @@
 			</cfif>
 
 		</cfif>
-		
-	
+	</cfif>
+
 		<!--- Update the cell count.
 		With Rowspan support this can get a bit wonky when you go to the next row
-		TODO: Work out a cell indentation scheme so that successive rows after a cell collspan 
-		enteries occur AFTER the colspan 
+		TODO: Work out a cell indentation scheme so that successive rows after a cell collspan
+		enteries occur AFTER the colspan
 		Cells CAN be directly accessed using the row update--->
 		<cfset VARIABLES.RowTag.CellIndex += ATTRIBUTES.ColSpan />
 		
