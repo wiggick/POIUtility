@@ -2,7 +2,7 @@
 
 ### The MIT License (MIT)
 
-Copyright (c) 2013 [Ben Nadel][1]
+Copyright (c) 2019 [Chris Wigginton][2] based on work by (c) 2013 [Ben Nadel][1]
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -22,7 +22,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 [1]: http://www.bennadel.com
-
+[2]: http://intersuite.com
 # Apache POI & XML Beans
 ### Apache License
 
