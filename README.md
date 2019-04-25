@@ -5,8 +5,8 @@ I've brought POIUtility and custom tags up to date to use the latest Apache POI 
  The query mechanism now returns the query with the proper column names if a header row is available.
 
  
-* Added update boolean to poi:cell which will try to retrieve existing cell and only update the value, preserving cell formatting if   template is used.
-* Fixed poi:document EvaluateFormulas to evaluate all cells in xlsx (tested with single sheet formula references )
+* Added update boolean to poi:cell which will try to retrieve existing cell and only update the value, preserving cell formatting if   template is used.(4/24/2019)
+* Fixed poi:document EvaluateFormulas to evaluate all cells in xlsx (tested with single sheet formula references ) (4/24/2019)
 * Added comment and comment author support for cells. (4/12/2019)
 * Added support for Apache POI 4.0.1
 * Added  Mark Mandel's JavaLoader.cfc
