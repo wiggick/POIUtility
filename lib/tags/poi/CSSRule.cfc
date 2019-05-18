@@ -366,10 +366,10 @@ component  {
 	}
 
 	/**
-	* @hint Cleans a passed in number to work with Excel's limitation of a 15 digit precision calculations where to put this,
-	* just putting this here, not really css, but does apply to the formatting and CSSRule is not an obj in the Document tag.
+	* @hint Cleans a passed in number to work with Excel's limitation of a 15 digit precision calculations
+	* just putting this here, not really css, but does apply to the formatting and CSSRule is an obj in the Document tag.
 	* @value Number to be rounded if larger than 15 digits
-	* @output true
+	* @output false
 	**/
 		function RoundForExcel( value, digits=0 ){
 
