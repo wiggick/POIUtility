@@ -5,6 +5,8 @@ I've brought POIUtility and custom tags up to date to use the latest Apache POI 
  The query mechanism now returns the query with the proper column names if a header row is available.
 
  
+* Added update boolean to poi:cell which will try to retrieve existing cell and only update the value, preserving cell formatting if   template is used.(4/24/2019)
+* Fixed poi:document EvaluateFormulas to evaluate all cells in xlsx (tested with single sheet formula references ) (4/24/2019)
 * Added comment and comment author support for cells. (4/12/2019)
 * Added support for Apache POI 4.0.1
 * Added  Mark Mandel's JavaLoader.cfc
@@ -61,7 +63,7 @@ Style: [optional] Sets default CSS styles for all cells in the document.
 
 CreateXLSX: [optional] boolean if true will create xlsx (default)
 
-EvaluateFormulas: [optional] (WORK IN PROGRESS) will evaluate formulas after creation/edit.  Useful for working with templates with predefined formulas.
+EvaluateFormulas: [optional] will evaluate formulas after creation/edit.  Useful for working with templates with predefined formulas.
 
 __Note__: Name and File are optional, but ONE of them is required.
 
@@ -113,6 +115,8 @@ Class: [optional] The class names (defined above) that should be applied to this
 Style: [optional] The CSS styles that should be applied to this column.
 
 Freeze: [optional] Boolean value to determine if this column should be frozen in the document.
+
+Update: [optional] if set and cell exists in sheet, will only set the value of the cell, ignoring any formatting options. (might change this to still retrieve the cell if it exists, allowing for partial style updates.)
 
 
 ## Row
