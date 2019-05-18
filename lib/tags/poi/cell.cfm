@@ -49,7 +49,7 @@
 			default="1"
 			/>
 
-	
+
 		<!--- Default number format mask. --->
 		<cfparam
 			name="ATTRIBUTES.NumberFormat"
@@ -104,6 +104,21 @@
 			type="string"
 			default="false"
 			/>
+
+		<!--- width hack so it can be specified at the cell level when being created dynamically
+		applies to the sheet column  Columns will override --->
+
+		<cfparam
+		    name="ATTRIBUTES.width"
+		    type="numeric"
+		    default="0">
+
+		<!--- Excel can only support a precision of 15 digits (just the digits, decimal point not included), it will simply truncate off decimals
+		without rounding.  Appying a non-negative value will send the value through a rounding function --->
+		<cfparam
+			name="ATTRIBUTES.round"
+			type="numeric"
+			default="-1">
 
 		<!--- If the user provided a number format, check to see if it is valid. --->
 		<cfif NOT StructKeyExists( VARIABLES.DocumentTag.NumberFormats, ATTRIBUTES.NumberFormat )>
@@ -275,12 +290,23 @@
 		</cfif>
 
 
+		<cfif ATTRIBUTES.round gt 0 and ListFindNoCase( "double,numeric", ATTRIBUTES.type )>
+			<cfset THISTAG.GeneratedContent = VARIABLES.DocumentTag.CSSRule.RoundForExcel( THISTAG.GeneratedContent, ATTRIBUTES.round )>
+		</cfif>
+
+
 		<!---
 			ASSERT: At this point, no matter where the value is coming
 			from, we know that the value we want to work with is stored
 			in the Generated Content.
 		--->
 
+		<cfif ATTRIBUTES.width >
+			<CFSET VARIABLES.SheetTag.Sheet.SetColumnWidth(
+						JavaCast( "int", (ATTRIBUTES.Index - 1) ),
+						JavaCast( "int", Min( 32767, ATTRIBUTES.width * 37) )
+						)>
+		</cfif>
 
 		<cfif ATTRIBUTES.Update>
 			<cfset VARIABLES.Cell = VARIABLES.RowTag.Row.GetCell(
@@ -312,15 +338,15 @@
 		 		<cfset VARIABLES.comment.setAuthor( ATTRIBUTES.CommentAuthor )>
 		 		<cfset ATTRIBUTES.Comment = Attributes.CommentAuthor & ": " & ATTRIBUTES.Comment>
 		 	</cfif>
-	
+
 		 	<cfset VARIABLES.commentContents = VARIABLES.DocumentTag.CreationHelper.createRichTextString( ATTRIBUTES.Comment )>
 		 	<cfif Len( ATTRIBUTES.CommentAuthor )>
 			 	<cfset VARIABLES.commentContents.applyFont( JavaCast("int", 0), JavaCast("int", len( ATTRIBUTES.CommentAuthor ) + 2 ),VARIABLES.DocumentTag.commentFont )>
 		 	</cfif>
-		 	
-		 	
+
+
 		 	<cfset VARIABLES.comment.setString( VARIABLES.commentContents )>
-		 
+
 		 	<cfset VARIABLES.cell.setCellComment( VARIABLES.comment )>
 
 		</cfif>
@@ -331,7 +357,7 @@
 		<cfif Len( THISTAG.GeneratedContent )>
 
 			<!--- Check to see which type of value we are setting. --->
-			<cfswitch expression="#ATTRIBUTES.Type#">
+			<cfswitch expression="#lcase(ATTRIBUTES.Type)#">
 
 				<cfcase value="date">
 
@@ -348,6 +374,14 @@
 					<!--- Set date value. --->
 					<cfset VARIABLES.Cell.SetCellValue( VARIABLES.Date ) />
 
+				</cfcase>
+
+				<!--- double is more precise when working with decimals on larger precision numers (15 or less digits that is) --->
+				<cfcase value="double">
+					<!--- Set numeric value. --->
+					<cfset VARIABLES.Cell.SetCellValue(
+						JavaCast( "double", THISTAG.GeneratedContent )
+						) />
 				</cfcase>
 
 				<cfcase value="numeric,custom">
@@ -562,11 +596,11 @@
 			 "rowspan" = ( ATTRIBUTES.RowSpan gt 1 ? VARIABLES.SheetTag.RowIndex + ATTRIBUTES.RowSpan - 2 : VARIABLES.SheetTag.RowIndex - 1),
 			 "col" = ( ATTRIBUTES.Index - 1),
 			 "colspan" = ( ATTRIBUTES.ColSpan gt 1 ? ATTRIBUTES.Index + ATTRIBUTES.ColSpan - 2 : ATTRIBUTES.Index - 1) })>
-			 
+
 			<cfif ATTRIBUTES.colSpan GT 1>
 				 <cfset VARIABLES.RowTag.CellIndex += ATTRIBUTES.ColSpan />
 			</cfif>
-			
+
 			<cfif ATTRIBUTES.rowSpan GT 1>
 				 <cfset VARIABLES.SheetTag.RowIndex += ATTRIBUTES.RowSpan - 1 />
 			</cfif>
@@ -580,7 +614,7 @@
 		enteries occur AFTER the colspan
 		Cells CAN be directly accessed using the row update--->
 		<cfset VARIABLES.RowTag.CellIndex += ATTRIBUTES.ColSpan />
-		
+
 	</cfcase>
 
 </cfswitch>

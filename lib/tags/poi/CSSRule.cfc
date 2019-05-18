@@ -4,14 +4,14 @@
 *   Now requires JavaLoader to support latest version of POI (included in distribution for drop and play)
 *   Accessors are enabled to make it easier to write unit tests to grab the available values
 *   Added region support that provides colSpan and rowSpan
-* 
+*
 *   @author: Chris Wigginton, (Original Author Ben Nadel )
-* 	@verison 4.0
-*   @date 4/4/2019
-* 	@hint Handles CSS utility functions." 
+* 	@verison 4.0.1
+*   @date 5/5/2019
+* 	@hint Handles CSS utility functions."
 *   @accessors true
 *   @output false
-* 
+*
 */
 component  {
 
@@ -36,7 +36,7 @@ component  {
    property any    workbook;
 
 
-  	
+
 	/**
 	* @hint Returns an initialized component.
 	* @isXLSX boolean on type of file
@@ -50,7 +50,7 @@ component  {
 		VARIABLES.isXLSX = ARGUMENTS.isXLSX;
 
 		VARIABLES.javaLoader = ARGUMENTS.javaLoader;
-		
+
 		VARIABLES.workbook = ARGUMENTS.workbook;
 
 		VARIABLES.classes = {
@@ -62,7 +62,7 @@ component  {
 			cellRangeAddress     = "org.apache.poi.ss.util.CellRangeAddress",
 			RegionUtil           = "org.apache.poi.ss.util.RegionUtil"
 		};
-		
+
 		//color is the biggest change between xlsx and xls
 		if( ARGUMENTS.isXLSX ){
 			VARIABLES.isXLSX = true;
@@ -299,7 +299,7 @@ component  {
 			RIDGE   = "DOUBLE",
 			INSET   = "DOUBLE",
 			OUTSET  = "DOUBLE",
-			INITIAL = "NONE", 
+			INITIAL = "NONE",
 			INHERIT = "NONE"
 		};
 
@@ -322,7 +322,7 @@ component  {
 			 THIN_BACKWARD_DIAG  = "THIN_BACKWARD_DIAG",
 			 THIN_FORWARD_DIAG   = "THIN_FORWARD_DIAG",
 			 THIN_HORZ_BANDS     = "THIN_HORZ_BANDS",
-			 THIN_VERT_BANDS     = "THIN_VERT_BANDS" 
+			 THIN_VERT_BANDS     = "THIN_VERT_BANDS"
 		};
 
 		VARIABLES.horizontalAlignments = {
@@ -336,7 +336,7 @@ component  {
 			RIGHT            = true
 		};
 
-		
+
 		VARIABLES.verticalAlignments = {
 			BOTTOM           = true,
 			CENTER           = true,
@@ -353,7 +353,7 @@ component  {
 
 		if( VARIABLES.isXLSX ){
 			VARIABLES.IndexedColorMap = ARGUMENTS.workbook.getStylesSource().getIndexedColors();
-		}else {			
+		}else {
 			VARIABLES.palette = ARGUMENTS.workbook.getCustomPalette();
 		}
 
@@ -366,10 +366,54 @@ component  {
 	}
 
 	/**
+	* @hint Cleans a passed in number to work with Excel's limitation of a 15 digit precision calculations where to put this,
+	* just putting this here, not really css, but does apply to the formatting and CSSRule is not an obj in the Document tag.
+	* @value Number to be rounded if larger than 15 digits
+	* @output true
+	**/
+		function RoundForExcel( value, digits=0 ){
+
+			if (! isNumeric( ARGUMENTS.value ) ){
+				return ARGUMENTS.value;
+			}
+
+			LOCAL.roundFormat = "_";
+			LOCAL.integerPart = Int( abs( ARGUMENTS.value ) );
+			LOCAL.numberOfDigits = Int( Log10( LOCAL.integerPart ) + 1 );
+
+			if( abs( ARGUMENTS.value ) eq abs( LOCAL.integerPart ) ){
+				return ARGUMENTS.value;
+			}
+
+			LOCAL.decimalAvailable = ( 15 - LOCAL.numberOfDigits lt 0 ? 0 : 15 - LOCAL.numberOfDigits );
+
+			if( ARGUMENTS.digits eq 0 or LOCAL.decimalAvailable eq 0 ){
+				return NumberFormat( ARGUMENTS.value, LOCAL.roundFormat );
+			}
+
+			LOCAL.padding = ( LOCAL.decimalAvailable gte ARGUMENTS.digits ? ARGUMENTS.digits : LOCAL.decimalAvailable );
+
+			LOCAL.roundDecimalFormat = LOCAL.roundFormat & "."  & repeatString("0", LOCAL.padding );
+
+			LOCAL.result = NumberFormat( ARGUMENTS.value, LOCAL.roundDecimalFormat );
+
+			//Perform final check that rounding didn't make it bigger than 15 digits 999999999999999.99 etc., otherwise round without decimals
+
+			if( Int( Log10( Int( abs( LOCAL.result ) ) ) + 1 ) + LOCAL.padding lte 15 ){
+				return LOCAL.result;
+			}else{
+				return NumberFormat( ARGUMENTS.value, LOCAL.roundFormat );
+			}
+
+
+		}
+
+
+	/**
 	* @hint Adds CSS properties to passed-in css hash map returns it.
 	* @PropertyMap I am the CSS hash map being updated.
 	* @CSS CSS properties for to be added to the given map (may have multiple properties separated by semi-colons).
-	* 
+	*
 	* @output false
 	*/
 	public struct function AddCSS( required struct PropertyMap, required string CSS){
@@ -420,7 +464,7 @@ component  {
 	* @hint Parses the given property and adds it to the given CSS property map.
 	* @PropertyMap I am the CSS hash map being updated
 	* @Property The name-value pair property that will be added to the CSS rule.
-	* 
+	*
 	* @output false
 	*/
 	public boolean function AddProperty( required struct PropertyMap, required string Property ){
@@ -510,7 +554,7 @@ component  {
 	* @PropertyMap I am the CSS hash map being updated.
 	* @Workbook The workbook containing this cell style.
 	* @CellStyle The HSSFCellStyle instance to which we are applying the CSS property rules.
-	* 
+	*
 	* @output false
 	*/
 	public any function ApplyToCellStyle(required struct PropertyMap, required any Workbook, required any CellStyle ){
@@ -539,8 +583,8 @@ component  {
 		 	}
 
 			 //let background-pattern do an override
-			if (! Len( LOCAL.PropertyMap[ "background-pattern" ] ) ){	
-					ARGUMENTS.CellStyle.SetFillPattern( VARIABLES.fillPattern.SOLID_FOREGROUND );			
+			if (! Len( LOCAL.PropertyMap[ "background-pattern" ] ) ){
+					ARGUMENTS.CellStyle.SetFillPattern( VARIABLES.fillPattern.SOLID_FOREGROUND );
 			}
 		}
 
@@ -550,22 +594,22 @@ component  {
 		}else if( Len( LOCAL.PropertyMap[ "background-pattern" ] ) ){
 
 			if( StructKeyExists( VARIABLES.fillPatterns, UCase( LOCAL.PropertyMap[ "background-pattern" ] ) ) ){
-				
+
 				ARGUMENTS.CellStyle.SetFillPattern( VARIABLES.fillPattern[ UCase( LOCAL.PropertyMap[ 'background-pattern' ] ) ] );
 			}
 		}
 
 		//handle generic border-style
 		if(  Len( LOCAL.PropertyMap[ "border-style" ] ) ){
-			
+
 			LOCAL.borderStyleName = getMappedBorderStyleName( Ucase( LOCAL.PropertyMap[ 'border-style' ] ) );
 			LOCAL.BorderStyle = VARIABLES.BorderStyle[ LOCAL.borderStyleName ];
-			
+
 			ARGUMENTS.CellStyle.SetBorderTop( LOCAL.BorderStyle );
 			ARGUMENTS.CellStyle.SetBorderBottom( LOCAL.BorderStyle );
 			ARGUMENTS.CellStyle.SetBorderRight( LOCAL.BorderStyle );
 			ARGUMENTS.CellStyle.SetBorderLeft( LOCAL.BorderStyle );
-				
+
 		}
 		//handle generic border color
 
@@ -576,12 +620,12 @@ component  {
 				    if(! VARIABLES.isXLSX ){
 				    	LOCAL.BorderColor = LOCAL.BorderColor.getIndex();
 				    }
-				    
+
 			   		ARGUMENTS.CellStyle.SetTopBorderColor( LOCAL.BorderColor );
 					ARGUMENTS.CellStyle.SetRightBorderColor( LOCAL.BorderColor );
 					ARGUMENTS.CellStyle.SetBottomBorderColor( LOCAL.BorderColor );
 					ARGUMENTS.CellStyle.SetLeftBorderColor( LOCAL.BorderColor );
-					
+
 				}
 		}
 
@@ -612,10 +656,10 @@ component  {
 			}
 
 			//set directional border colors
-			if(  Len( LOCAL.PropertyMap[ "border-#LOCAL.BorderSide#-color" ] ) 
+			if(  Len( LOCAL.PropertyMap[ "border-#LOCAL.BorderSide#-color" ] )
 				AND StructKeyExists( VARIABLES.POIColors, Ucase( LOCAL.PropertyMap[ 'border-#LOCAL.BorderSide#-color' ] ) ) ){
 				LOCAL.BorderColor = getColorByName( UCase( PropertyMap[ 'border-#LOCAL.BorderSide#-color' ] ) );
-				
+
 				if(! VARIABLES.isXLSX ){
 				    	LOCAL.BorderColor = LOCAL.BorderColor.getIndex();
 				    }
@@ -703,17 +747,17 @@ component  {
 
 		// Check to see if we have any text alignment.
 		if( StructKeyExists( VARIABLES.horizontalAlignments, ucase( LOCAL.PropertyMap[ 'text-align' ] )  ) ){
-			
+
 			ARGUMENTS.CellStyle.SetAlignment( VARIABLES.horizontalAlignment[ UCase( LOCAL.PropertyMap[ 'text-align' ] ) ] );
 		}
-	
+
 
 		// Check to see if we have any vertical alignment.
 		if( StructKeyExists( VARIABLES.verticalAlignments, ucase( LOCAL.PropertyMap[ 'vertical-align' ] )  ) ){
-			
+
 			ARGUMENTS.CellStyle.SetVerticalAlignment( VARIABLES.verticalAlignment[ UCase( LOCAL.PropertyMap[ 'vertical-align' ] ) ] );
 		}
-	
+
 		/*
 			Check for white space. If we have normal, which is the default, then
 			let's turn on the text wrap. If we have anything else, then turn off
@@ -766,7 +810,7 @@ component  {
 	* @hint Checks to see if the given value validated for a given property.
 	* @Property The property we are checking for.
 	* @Value The value we are checking for validity
-	* 
+	*
 	* @output false
 	*/
 	public boolean function IsValidValue( required string Property, required string Value ){
@@ -775,7 +819,7 @@ component  {
 			Return whether it validates. If the property is not
 			valid, we are returning false (same as an invalid value).
 		*/
-		
+
 		return (
 			StructKeyExists( VARIABLES.CSS, ARGUMENTS.Property ) AND
 			REFind( "(?i)^#VARIABLES.CSSValidation[ ARGUMENTS.Property ]#$", ARGUMENTS.Value )
@@ -785,7 +829,7 @@ component  {
 	/**
 	* @hint Takes a quad metric and returns a four-point array.
 	* @Value The metric which may have between one and four values.
-	* 
+	*
 	* @output false
 	*/
 	public array function ParseQuadMetric( required string Value ){
@@ -835,7 +879,7 @@ component  {
 	* @hint Parses the background short-hand and sets the equivalent CSS properties.
 	* @PropertyMap I am the CSS hash map being updated.
 	* @Value The background short hand value.
-	* 
+	*
 	* @output false
 	*/
 	public boolean function SetBackground(required struct PropertyMap,required string Value ){
@@ -899,12 +943,12 @@ component  {
 	* @hint returns appropriate (XLS/XLSX) Color by colorName.  Since POI 4.0 you have to provide the workbench IndexedColorMap:
 	* @ColorName The name of color
 	* @Value The border short hand value.
-	* 
+	*
 	* @output false
 	*/
 	public any function getColorByName( string colorName ){
 
-		//First check if it's a hex color 
+		//First check if it's a hex color
 		If( ArrayLen( REMatch( "##[0-9ABCDEFabcdef]{6}",ARGUMENTS.colorName ) ) ){
 			return getColorByHex( ARGUMENTS.colorName );
 		}
@@ -926,7 +970,7 @@ component  {
 		}
 
 		return LOCAL.color;
-      
+
 	}
 
 	public any function getColorByHex( string hexval ){
@@ -934,7 +978,7 @@ component  {
 		//first check the HEXColorCache to see if we've already created it
 		if( StructKeyExists( VARIABLES.HEXColorCache, ARGUMENTS.hexval ) ){
 			return VARIABLES.HEXColorCache[ ARGUMENTS.hexval ];
-		}	
+		}
 		LOCAL.RGBArray = HexToRGB( ARGUMENTS.hexval );
 
 		if( VARIABLES.isXLSX ){
@@ -944,7 +988,7 @@ component  {
 				JavaCast("int", LOCAL.RGBArray[3] ) );
 
 			LOCAL.color = VARIABLES.javaLoader.create( VARIABLES.classes.color ).init(
-			LOCAL.awtColor, VARIABLES.IndexedColorMap );			
+			LOCAL.awtColor, VARIABLES.IndexedColorMap );
 		}else{
 
 			LOCAL.color = VARIABLES.palette.findSimilarColor(
@@ -954,7 +998,7 @@ component  {
 		}
 
 		VARIABLES.HEXColorCache[ ARGUMENTS.hexval ] = LOCAL.color;
-	
+
 		return LOCAL.color;
 	}
 
@@ -963,7 +1007,7 @@ component  {
 	* @PropertyMap I am the CSS hash map being updated.
 	* @Name The name of the pseudo property that we want to set.
 	* @Value The border short hand value.
-	* 
+	*
 	* @output false
 	*/
 	public boolean function SetBorder(required struct PropertyMap,required string Name, required string Value ){
@@ -1043,7 +1087,7 @@ component  {
 	* @hint Parses the font short-hand and sets the equivalent CSS properties.
 	* @PropertyMap I am the CSS hash map being updated.
 	* @Value The font short hand value.
-	* 
+	*
 	* @output false
 	*/
 	public boolean function SetFont(required struct PropertyMap,required string Value ){
@@ -1092,7 +1136,7 @@ component  {
 	* @hint Parses the list style short-hand and sets the equivalent CSS properties.
 	* @PropertyMap I am the CSS hash map being updated.
 	* @Value The list style short hand value
-	* 
+	*
 	* @output false
 	*/
 	public boolean function SetListStyle( required struct PropertyMap,required string Value ){
@@ -1135,7 +1179,7 @@ component  {
 		* @hint Parses the margin short hand and sets the equivalent properties.
 		* @PropertyMap I am the CSS hash map being updated.
 		* @Value The margin short hand value.
-		* 
+		*
 		* @output false
 		*/
 	public boolean function SetMargin(required struct PropertyMap, required string Value ){
@@ -1165,7 +1209,7 @@ component  {
 	* @hint Parses the padding short hand and sets the equivalent properties.
 	* @PropertyMap I am the CSS hash map being updated.
 	* @Value The padding short hand value.
-	* 
+	*
 	* @output false
 	*/
 	public boolean function SetPadding( required struct PropertyMap, required string Value){
@@ -1210,7 +1254,7 @@ component  {
 	* @colspan The number of columns to span (pre adjusted for 0 based index)
 	* @row The target row ( pre adjusted for 0 based index )
 	* @rowSpan the number of rows (pre adjusted for 0 based index )
-	* 
+	*
 	* @output false
 	*/
 	public void function ApplyRange(required any sheet, required numeric col, required numeric colspan, required numeric row, required numeric rowspan){
@@ -1231,27 +1275,27 @@ component  {
 	    	VARIABLES.RegionUtil.setTopBorderColor(    LOCAL.cellStyle.getTopBorderColor(),     LOCAL.range, ARGUMENTS.sheet );
 	    	VARIABLES.RegionUtil.setLeftBorderColor(   LOCAL.cellStyle.getLeftBorderColor(),    LOCAL.range, ARGUMENTS.sheet );
 	    	VARIABLES.RegionUtil.setRightBorderColor(  LOCAL.cellStyle.getRightBorderColor(),   LOCAL.range, ARGUMENTS.sheet );
-    	}  	
+    	}
 	}
 	/**
 	* CFLIB Utility Functions
 	*/
 	/**
 	 * Convert a hexadecimal color into a RGB color value.
-	 * 
-	 * @param hexColor      6 character hexadecimal color value. 
-	 * @return Returns a string. 
-	 * @author Eric Carlisle (ericc@nc.rr.com) 
-	 * @version 1.0, November 6, 2001 
+	 *
+	 * @param hexColor      6 character hexadecimal color value.
+	 * @return Returns a string.
+	 * @author Eric Carlisle (ericc@nc.rr.com)
+	 * @version 1.0, November 6, 2001
 	 * @output false
 	 */
 	public array function HexToRGB(hexColor){
 	  /* Strip out poundsigns. */
 	  LOCAL.tHexColor = replace(ARGUMENTS.hexColor,'##','','ALL');
-	    
+
 	  /* Establish vairable for RGB color. */
 	  LOCAL.RGBlist='';
-	  LOCAL.RGPpart='';    
+	  LOCAL.RGPpart='';
 
 	  /* Initialize i */
 	  LOCAL.i=0;
@@ -1263,5 +1307,21 @@ component  {
 	  }
 	  return ListToArray(RGBlist);
 	}
-	
+
+	public function RGBToHex( r, g, b ){
+		ARGUMENTs.r = FormatBaseN( ARGUMENTS.r, 16 );
+		ARGUMENTS.g = FormatBaseN( g, 16 );
+		ARGUMENTS.b = FormatBaseN( b, 16 );
+
+		for(arg in ARGUMENTS){
+			if( len(ARGUMENTS[arg] ) lt 2){
+				ARGUMENTS[arg] = "0" & ARGUMENTS[arg];
+			}
+		}
+
+		return UCASE( ARGUMENTS.r & ARGUMENTS.g & ARGUMENTS.b );
+
+	}
+
+
 }
