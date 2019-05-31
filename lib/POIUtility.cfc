@@ -978,6 +978,10 @@ component {
 
 						LOCAL.DataMapCast = "int";
 
+					} else if (REFindNoCase( "varchar", LOCAL.DataMapValue )){
+						// check for varchar here so we can intercept "longvarchar" before the "long" numeric check
+						LOCAL.DataMapCast = "string";
+						
 					} else if (REFindNoCase( "long", LOCAL.DataMapValue )){
 
 						LOCAL.DataMapCast = "long";
