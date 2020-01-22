@@ -22,6 +22,12 @@
 	* @date 4/5/2019
 	*
 	*  Update History:
+	*  01/22/2020 Steve Johnson (SJ2019)
+	*   Now handles column names that aren't valid CF variables
+	*   Fixed bug related to specifying SheetIndex
+	*   Can now detect if a blank spreadsheet is passed in
+	*   More accurately treats exponential numbers as big decimals
+	* 
 	*  04/09/2019 Chris Wigginton
 	* 	WOW Really? over 12 years since an update :-)
 	*   Read and Write both XLS and XLSX
@@ -241,6 +247,11 @@ component {
 		
 		if (ARGUMENTS.SheetIndex GTE 0){
 
+			// SJ2019: if specifying a SheetIndex it expects "ARGUMENTS.WorkBook" which didn't actually exist
+			if( !StructKeyExists( ARGUMENTS,"WorkBook" ) ){
+				ARGUMENTS.WorkBook = LOCAL.WBObjects.WorkBook;
+			}
+
 			// Read the sheet data for a single sheet.
 			LOCAL.Sheets = ReadExcelSheet(
 				Workbook          = ARGUMENTS.WorkBook,
@@ -249,9 +260,10 @@ component {
 				RowsToRead        = ARGUMENTS.RowsToRead,
 				ColumnsToRead       = ARGUMENTS.ColumnsToRead,
 				ColumnStart       = ARGUMENTS.ColumnStart,
-				HeaderRowStart    = ARGUMENTS.HederRowStart,
+				HeaderRowStart    = ARGUMENTS.HeaderRowStart,
 				DataRowStart      = ARGUMENTS.DataRowStart	
 				);
+				// SJ2019: fixed typo in above function call: ARGUMENTS.HederRowStart changed to ARGUMENTS.HeaderRowStart
 			
 		} else {
 
@@ -433,6 +445,10 @@ component {
 						){
 						
 						LOCAL.ColumnName = LOCAL.Row.GetCell( JavaCast( "int", LOCAL.ColumnIndex ) ).GetStringCellValue();
+						// SJ2019: the QueryAddColumn would fail if column name had spaces or "#" - to be safe strip all but alphanumeric values
+						LOCAL.ColumnName = replace(LOCAL.ColumnName,"##","Num","all");
+						LOCAL.ColumnName = replace(LOCAL.ColumnName,"&","And","all");
+						LOCAL.ColumnName = reReplaceNoCase(LOCAL.ColumnName,"[^a-z0-9]","","all");
 						ArrayAppend(LOCAL.SheetData.COLUMNNAMES, LOCAL.ColumnName );
 						QueryAddColumn(
 							LOCAL.SheetData.Query,
@@ -571,6 +587,17 @@ component {
 								// could also be a date value. I am going to leave it up to
 								// the calling program to decide.
 								LOCAL.CellValue = LOCAL.Cell.GetNumericCellValue();
+
+								// SJ2019: Excel sometimes converts large decimals to exponential format
+								// which loses some of the precision. This is especially bad when it's
+								// actually going to be used as a string in the application - you might 
+								// be expecting "3891910034001" but Excel will change it to "3.89191E+12".
+								// The below JavaCast changes exponential numbers into big decimals. The 
+								// calling program can then format it as a string, a number, or as an
+								// exponential number.
+								if (reFind("[0-9]\.[0-9]+E\+[0-9]+",LOCAL.CellValue)) {
+									LOCAL.CellValue = JavaCast( "bigdecimal", LOCAL.CellValue );
+								}
 
 							} else if (LOCAL.CellType EQ LOCAL.CellType.STRING){
 
@@ -1129,6 +1156,10 @@ component {
 			LOCAL.Row = ARGUMENTS.Sheet.GetRow(
 				JavaCast( "int", LOCAL.RowIndex )
 				);
+			// SJ2019: if spreadsheet is empty then GetRow returns undefined and LOCAL.Row won't exist
+			if ( !structKeyExists( LOCAL, "Row" ) ){
+				return -1;
+			}
 
 			LOCAL.hasCells = false;
 			for( local.colIndex = ARGUMENTS.ColEnd; local.colIndex GTE ARGUMENTS.ColStart; local.colIndex -= 1){
