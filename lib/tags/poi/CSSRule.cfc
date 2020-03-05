@@ -720,9 +720,7 @@ component  {
 			case "700":
 			case "800":
 			case "900":
-				LOCAL.Font.SetBoldWeight(
-					LOCAL.Font.BOLDWEIGHT_BOLD
-					);
+				LOCAL.Font.SetBold( JavaCast( "boolean", true ) );
 				break;
 			case "normal":
 			case "100":
@@ -730,9 +728,7 @@ component  {
 			case "300":
 			case "400":
 			case "500":
-				LOCAL.Font.SetBoldWeight(
-					LOCAL.Font.BOLDWEIGHT_NORMAL
-					);
+				LOCAL.Font.SetBold( JavaCast( "boolean", false ) );
 				break;
 		}
 
