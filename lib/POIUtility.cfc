@@ -22,6 +22,18 @@
 	* @date 4/5/2019
 	*
 	*  Update History:
+	*  01/31/2020 Steve Johnson (SJ2020)
+	*   New arguments: ColumnFieldTypes, ColumnFieldSizes, ChangeDecimalsCalledAmountToDollars,
+	*     CellDateFormat, CellTimeFormat, CellTimestampFormat, CellDollarFormat
+	*   Now formats date values as Excel dates
+	*   Optionally allows decimals to be formatted as dollar amounts
+	* 
+	*  01/22/2020 Steve Johnson (SJ2019)
+	*   Now handles column names that aren't valid CF variables
+	*   Fixed bug related to specifying SheetIndex
+	*   Can now detect if a blank spreadsheet is passed in
+	*   More accurately treats exponential numbers as big decimals
+	* 
 	*  04/09/2019 Chris Wigginton
 	* 	WOW Really? over 12 years since an update :-)
 	*   Read and Write both XLS and XLSX
@@ -241,6 +253,11 @@ component {
 		
 		if (ARGUMENTS.SheetIndex GTE 0){
 
+			// SJ2019: if specifying a SheetIndex it expects "ARGUMENTS.WorkBook" which didn't actually exist
+			if( !StructKeyExists( ARGUMENTS,"WorkBook" ) ){
+				ARGUMENTS.WorkBook = LOCAL.WBObjects.WorkBook;
+			}
+
 			// Read the sheet data for a single sheet.
 			LOCAL.Sheets = ReadExcelSheet(
 				Workbook          = ARGUMENTS.WorkBook,
@@ -249,7 +266,7 @@ component {
 				RowsToRead        = ARGUMENTS.RowsToRead,
 				ColumnsToRead       = ARGUMENTS.ColumnsToRead,
 				ColumnStart       = ARGUMENTS.ColumnStart,
-				HeaderRowStart    = ARGUMENTS.HederRowStart,
+				HeaderRowStart    = ARGUMENTS.HeaderRowStart,
 				DataRowStart      = ARGUMENTS.DataRowStart	
 				);
 			
@@ -433,6 +450,10 @@ component {
 						){
 						
 						LOCAL.ColumnName = LOCAL.Row.GetCell( JavaCast( "int", LOCAL.ColumnIndex ) ).GetStringCellValue();
+						// SJ2019: the QueryAddColumn would fail if column name had spaces or "#" - to be safe strip all but alphanumeric values
+						LOCAL.ColumnName = replace(LOCAL.ColumnName,"##","Num","all");
+						LOCAL.ColumnName = replace(LOCAL.ColumnName,"&","And","all");
+						LOCAL.ColumnName = reReplaceNoCase(LOCAL.ColumnName,"[^a-z0-9]","","all");
 						ArrayAppend(LOCAL.SheetData.COLUMNNAMES, LOCAL.ColumnName );
 						QueryAddColumn(
 							LOCAL.SheetData.Query,
@@ -572,6 +593,17 @@ component {
 								// the calling program to decide.
 								LOCAL.CellValue = LOCAL.Cell.GetNumericCellValue();
 
+								// SJ2019: Excel sometimes converts large decimals to exponential format
+								// which loses some of the precision. This is especially bad when it's
+								// actually going to be used as a string in the application - you might 
+								// be expecting "3891910034001" but Excel will change it to "3.89191E+12".
+								// The below JavaCast changes exponential numbers into big decimals. The 
+								// calling program can then format it as a string, a number, or as an
+								// exponential number.
+								if (reFind("[0-9]\.[0-9]+E\+[0-9]+",LOCAL.CellValue)) {
+									LOCAL.CellValue = JavaCast( "bigdecimal", LOCAL.CellValue );
+								}
+
 							} else if (LOCAL.CellType EQ LOCAL.CellType.STRING){
 
 								LOCAL.CellValue = LOCAL.Cell.GetStringCellValue();
@@ -654,6 +686,11 @@ component {
 	* @hint Takes an array of 'Sheet' structure objects and writes each of them to a tab in the Excel file.
 	* @FilePath This is the expanded path of the Excel file.
 	* @Sheets This is an array of the data that is needed for each sheet of the excel OR it is a single Sheet object. Each 'Sheet' will be a structure containing the Query, ColumnList, ColumnNames, and SheetName.
+	* @ChangeDecimalsCalledAmountToDollars Whether to attempt automatic formatting of dollar amounts.
+	* @CellDateFormat Optional date format for date cells
+	* @CellTimeFormat Optional time format for time cells
+	* @CellTimestampeFormat Optional timestamp format for timestamp cells
+	* @CellDollarFormat Optional number format for "dollar" cells
 	* @Delimiters The list of delimiters used for the column list and column name arguments.
 	* @HeaderCSS Defines the limited CSS available for the header row (if a header row is used).
 	* @RowCSS Defines the limited CSS available for the non-header rows.
@@ -661,6 +698,8 @@ component {
 	* @output false
 	*/
 	public void function WriteExcel(required string FilePath, required any Sheets,
+		boolean ChangeDecimalsCalledAmountToDollars="false", string CellDateFormat="", 
+		string CellTimeFormat="", string CellTimestampeFormat="", string CellDollarFormat="",
 		string Delimiters=",", string HeaderCSS="", string RowCSS="", string AltRowCSS="" ){
 
 		//TODO Javaloader and create workbook
@@ -689,7 +728,14 @@ component {
 					Query = ARGUMENTS.Sheets[ LOCAL.SheetIndex ].Query,
 					ColumnList = ARGUMENTS.Sheets[ LOCAL.SheetIndex ].ColumnList,
 					ColumnNames = ARGUMENTS.Sheets[ LOCAL.SheetIndex ].ColumnNames,
+					ColumnFieldTypes = ARGUMENTS.Sheets[ LOCAL.SheetIndex ].ColumnFieldTypes,
+					ColumnFieldSizes = ARGUMENTS.Sheets[ LOCAL.SheetIndex ].ColumnFieldSizes,
 					SheetName = ARGUMENTS.Sheets[ LOCAL.SheetIndex ].SheetName,
+					ChangeDecimalsCalledAmountToDollars = ARGUMENTS.ChangeDecimalsCalledAmountToDollars,
+					CellDateFormat = ARGUMENTS.CellDateFormat,
+					CellTimeFormat = ARGUMENTS.CellTimeFormat,
+					CellTimestampFormat = ARGUMENTS.CellTimestampFormat,
+					CellDollarFormat = ARGUMENTS.CellDollarFormat,
 					Delimiters = ARGUMENTS.Delimiters,
 					HeaderCSS = ARGUMENTS.HeaderCSS,
 					RowCSS = ARGUMENTS.RowCSS,
@@ -708,7 +754,14 @@ component {
 				Query = ARGUMENTS.Sheets.Query,
 				ColumnList = ARGUMENTS.Sheets.ColumnList,
 				ColumnNames = ARGUMENTS.Sheets.ColumnNames,
+				ColumnFieldTypes = ARGUMENTS.Sheets.ColumnFieldTypes,
+				ColumnFieldSizes = ARGUMENTS.Sheets.ColumnFieldSizes,
 				SheetName = ARGUMENTS.Sheets.SheetName,
+				ChangeDecimalsCalledAmountToDollars = ARGUMENTS.ChangeDecimalsCalledAmountToDollars,
+				CellDateFormat = ARGUMENTS.CellDateFormat,
+				CellTimeFormat = ARGUMENTS.CellTimeFormat,
+				CellTimestampFormat = ARGUMENTS.CellTimestampFormat,
+				CellDollarFormat = ARGUMENTS.CellDollarFormat,
 				Delimiters = ARGUMENTS.Delimiters,
 				HeaderCSS = ARGUMENTS.HeaderCSS,
 				RowCSS = ARGUMENTS.RowCSS,
@@ -759,7 +812,14 @@ component {
 	* @Query This is the query from which we will get the data
 	* @ColumnList This is list of columns provided in custom-ordered
 	* @ColumnNames This the the list of optional header-row column names. If this is not provided, no header row is used."
+	* @ColumnFieldTypes This is the list of optional column field types. (default,byte,char,short,int,long,float,double,boolean,string,date,time,timestamp,dollar)
+	* @ColumnFieldSizes This is the list of optional column field sizes. (default,auto,number of characters, or simply "full auto")
 	* @SheetName This is the optional name that appears in this sheet's tab
+	* @ChangeDecimalsCalledAmountToDollars Whether to attempt automatic formatting of dollar amounts.
+	* @CellDateFormat Optional date format for date cells
+	* @CellTimeFormat Optional time format for time cells
+	* @CellTimestampeFormat Optional timestamp format for timestamp cells
+	* @CellDollarFormat Optional number format for "dollar" cells
 	* @Delimiters The list of delimiters used for the column list and column name arguments.
 	* @HeaderCSS Defines the limited CSS available for the header row (if a header row is used)
 	* @RowCSS Defines the limited CSS available for the non-header rows
@@ -769,7 +829,14 @@ component {
 	public void function WriteExcelSheet(required any WorkBook, required any CSSRule, required any Query,
 		                                string ColumnList=ARGUMENTS.Query.ColumnList,
 		                                string ColumnNames="",
-		                                string SheetName="Sheet #(ARGUMENTS.WorkBook.GetNumberOfSheets() + 1)#"
+		                                string ColumnFieldTypes="",
+		                                string ColumnFieldSizes="",
+		                                string SheetName="Sheet #(ARGUMENTS.WorkBook.GetNumberOfSheets() + 1)#",
+		                                boolean ChangeDecimalsCalledAmountToDollars="false",
+		                                string CellDateFormat="",
+		                                string CellTimeFormat="",
+		                                string CellTimestampeFormat="", 
+		                                string CellDollarFormat="",
 		                                string Delimiters=",", 
 		                                string HeaderCSS="", string RowCSS="", string AltRowCSS=""){
 
@@ -839,6 +906,67 @@ component {
 				ARGUMENTS.Workbook,
 				LOCAL.AltRowStyle
 				);
+
+			
+			// SJ2020: create additional cell styles for dates
+			if (len(ARGUMENTS.CellDateFormat)) {
+				LOCAL.CellStyleDateFormat = ARGUMENTS.Workbook.getCreationHelper().createDataFormat().getFormat(ARGUMENTS.CellDateFormat);
+			} else {
+				LOCAL.CellStyleDateFormat = ARGUMENTS.Workbook.getCreationHelper().createDataFormat().getFormat("yyyy-MM-dd");
+			}
+			
+			LOCAL.RowStyleDate = ARGUMENTS.WorkBook.CreateCellStyle();
+			LOCAL.RowStyleDate.cloneStyleFrom(LOCAL.RowStyle);
+			LOCAL.RowStyleDate.setDataFormat(LOCAL.CellStyleDateFormat);
+			
+			LOCAL.AltRowStyleDate = ARGUMENTS.WorkBook.CreateCellStyle();
+			LOCAL.AltRowStyleDate.cloneStyleFrom(LOCAL.AltRowStyle);
+			LOCAL.AltRowStyleDate.setDataFormat(LOCAL.CellStyleDateFormat);
+			
+			// SJ2020: create additional cell styles for time
+			if (len(ARGUMENTS.CellTimeFormat)) {
+				LOCAL.CellStyleTimeFormat = ARGUMENTS.Workbook.getCreationHelper().createDataFormat().getFormat(ARGUMENTS.CellTimeFormat);
+			} else {
+				LOCAL.CellStyleTimeFormat = ARGUMENTS.Workbook.getCreationHelper().createDataFormat().getFormat("HH:mm:ss");
+			}
+			
+			LOCAL.RowStyleTime = ARGUMENTS.WorkBook.CreateCellStyle();
+			LOCAL.RowStyleTime.cloneStyleFrom(LOCAL.RowStyle);
+			LOCAL.RowStyleTime.setDataFormat(LOCAL.CellStyleTimeFormat);
+			
+			LOCAL.AltRowStyleTime = ARGUMENTS.WorkBook.CreateCellStyle();
+			LOCAL.AltRowStyleTime.cloneStyleFrom(LOCAL.AltRowStyle);
+			LOCAL.AltRowStyleTime.setDataFormat(LOCAL.CellStyleTimeFormat);
+			
+			// SJ2020: create additional cell styles for timestamp
+			if (len(ARGUMENTS.CellTimestampFormat)) {
+				LOCAL.CellStyleTimestampFormat = ARGUMENTS.Workbook.getCreationHelper().createDataFormat().getFormat(ARGUMENTS.CellTimestampFormat);
+			} else {
+				LOCAL.CellStyleTimestampFormat = ARGUMENTS.Workbook.getCreationHelper().createDataFormat().getFormat("yyyy-MM-dd HH:mm:ss");
+			}
+			
+			LOCAL.RowStyleTimestamp = ARGUMENTS.WorkBook.CreateCellStyle();
+			LOCAL.RowStyleTimestamp.cloneStyleFrom(LOCAL.RowStyle);
+			LOCAL.RowStyleTimestamp.setDataFormat(LOCAL.CellStyleTimestampFormat);
+			
+			LOCAL.AltRowStyleTimestamp = ARGUMENTS.WorkBook.CreateCellStyle();
+			LOCAL.AltRowStyleTimestamp.cloneStyleFrom(LOCAL.AltRowStyle);
+			LOCAL.AltRowStyleTimestamp.setDataFormat(LOCAL.CellStyleTimestampFormat);
+			
+			// SJ2020: create additional cell styles for dollar amounts
+			if (len(ARGUMENTS.CellDollarFormat)) {
+				LOCAL.CellStyleDollarFormat = ARGUMENTS.Workbook.getCreationHelper().createDataFormat().getFormat(ARGUMENTS.CellDollarFormat);
+			} else {
+				LOCAL.CellStyleDollarFormat = ARGUMENTS.Workbook.getCreationHelper().createDataFormat().getFormat("$##,####0.00;[Red]($##,####0.00)");
+			}
+
+			LOCAL.RowStyleDollar = ARGUMENTS.WorkBook.CreateCellStyle();
+			LOCAL.RowStyleDollar.cloneStyleFrom(LOCAL.RowStyle);
+			LOCAL.RowStyleDollar.setDataFormat(LOCAL.CellStyleDollarFormat);
+			
+			LOCAL.AltRowStyleDollar = ARGUMENTS.WorkBook.CreateCellStyle();
+			LOCAL.AltRowStyleDollar.cloneStyleFrom(LOCAL.AltRowStyle);
+			LOCAL.AltRowStyleDollar.setDataFormat(LOCAL.CellStyleDollarFormat);
 
 
 			// Create the sheet in the workbook.
@@ -924,6 +1052,17 @@ component {
 				ARGUMENTS.Delimiters
 				);
 
+			// SJ2020: Convert the lists of column field types and sizes
+			// to arrays for easier indexing and faster access.
+			LOCAL.ColumnFieldTypes = ListToArray(
+				ARGUMENTS.ColumnFieldTypes,
+				ARGUMENTS.Delimiters
+				);
+			LOCAL.ColumnFieldSizes = ListToArray(
+				ARGUMENTS.ColumnFieldSizes,
+				ARGUMENTS.Delimiters
+				);
+
 			// Loop over the query records to add each one to the
 			// current sheet.
 			for (
@@ -974,7 +1113,11 @@ component {
 					// Check to see what value type we are working with. I am
 					// not sure what the set of values are, so trying to keep
 					// it general.
-					if (REFindNoCase( "int", LOCAL.DataMapValue )){
+					if (REFindNoCase( "bigint", LOCAL.DataMapValue )){
+
+						LOCAL.DataMapCast = "string";
+
+					} else if (REFindNoCase( "int", LOCAL.DataMapValue )){
 
 						LOCAL.DataMapCast = "int";
 
@@ -1012,6 +1155,21 @@ component {
 
 					}
 
+					// SJ2020: Override cell type if user passed in list of field types
+					Local.OverrideFieldType = "";
+					if (ArrayLen(LOCAL.ColumnFieldTypes)) {
+						Local.OverrideFieldType = LOCAL.ColumnFieldTypes[ LOCAL.ColumnIndex ];
+						if (Local.OverrideFieldType != "default" && Local.OverrideFieldType != "") {
+							if (Local.OverrideFieldType == "date" || Local.OverrideFieldType == "time" || Local.OverrideFieldType == "timestamp") {
+								LOCAL.DataMapCast = "float";
+							} else if (Local.OverrideFieldType == "dollar") {
+								LOCAL.DataMapCast = "double";
+							} else {
+								LOCAL.DataMapCast = Local.OverrideFieldType;
+							}
+						}
+					}
+
 					// Set the cell value using the data map casting that we
 					// just determined and the value that we previously grabbed
 					// (for short hand).
@@ -1046,10 +1204,109 @@ component {
 
 					}
 
+					// SJ2020: override style if it's a date
+					if (REFindNoCase( "date", LOCAL.DataMapValue ) || Local.OverrideFieldType == "date"){
+
+						if (LOCAL.RowIndex MOD 2){
+
+							// Set standard row style.
+							LOCAL.Cell.SetCellStyle(
+								LOCAL.RowStyleDate
+								);
+
+						} else {
+
+							// Set alternate row style.
+							LOCAL.Cell.SetCellStyle(
+								LOCAL.AltRowStyleDate
+								);
+
+						}
+
+					// SJ2020: override style if it's a timestamp
+					} else if (REFindNoCase( "timestamp", LOCAL.DataMapValue ) || Local.OverrideFieldType == "timestamp"){
+
+						if (LOCAL.RowIndex MOD 2){
+
+							// Set standard row style.
+							LOCAL.Cell.SetCellStyle(
+								LOCAL.RowStyleTimestamp
+								);
+
+						} else {
+
+							// Set alternate row style.
+							LOCAL.Cell.SetCellStyle(
+								LOCAL.AltRowStyleTimestamp
+								);
+
+						}
+
+					// SJ2020: override style if it's a time
+					} else if (REFindNoCase( "time", LOCAL.DataMapValue ) || Local.OverrideFieldType == "time"){
+
+						if (LOCAL.RowIndex MOD 2){
+
+							// Set standard row style.
+							LOCAL.Cell.SetCellStyle(
+								LOCAL.RowStyleTime
+								);
+
+						} else {
+
+							// Set alternate row style.
+							LOCAL.Cell.SetCellStyle(
+								LOCAL.AltRowStyleTime
+								);
+
+						}
+
+					// SJ2020: override style if it's a dollar amount
+					} else if ((ARGUMENTS.ChangeDecimalsCalledAmountToDollars && REFindNoCase( "decimal", LOCAL.DataMapValue )
+									&& REFindNoCase( "amount$", LOCAL.ColumnNames[ LOCAL.ColumnIndex ] ) || Local.OverrideFieldType == "dollar")){
+
+						if (LOCAL.RowIndex MOD 2){
+
+							// Set standard row style.
+							LOCAL.Cell.SetCellStyle(
+								LOCAL.RowStyleDollar
+								);
+
+						} else {
+
+							// Set alternate row style.
+							LOCAL.Cell.SetCellStyle(
+								LOCAL.AltRowStyleDollar
+								);
+
+						}
+
+					}				
 				}
 
 			}
 
+			// SJ2020: Loop over the columns and override widths, if requested
+			if (ArrayLen(LOCAL.ColumnFieldSizes)) {
+				for (
+					LOCAL.ColumnIndex = 1 ;
+					LOCAL.ColumnIndex LTE ArrayLen( LOCAL.Columns ) ;
+					LOCAL.ColumnIndex = (LOCAL.ColumnIndex + 1)
+					){
+
+					if (LOCAL.ColumnIndex lte ArrayLen(LOCAL.ColumnFieldSizes)) {
+						LOCAL.OverrideColumnSize = LOCAL.ColumnFieldSizes[ LOCAL.ColumnIndex ];
+					}
+					if (LOCAL.OverrideColumnSize == "auto" || LOCAL.ColumnFieldSizes[1] == "full auto") {
+						LOCAL.Sheet.autoSizeColumn(LOCAL.ColumnIndex - 1);
+					} else if(isValid("integer",LOCAL.OverrideColumnSize)) {
+						LOCAL.Sheet.setColumnWidth(LOCAL.ColumnIndex - 1, 
+							256 * JavaCast( "int", LOCAL.OverrideColumnSize )
+						);
+					}
+				
+				}
+			}
 
 			// Return out.
 			return;
@@ -1064,14 +1321,24 @@ component {
 	* @ColumnList This is list of columns provided in custom-order
 	* @ColumnNames This the the list of optional header-row column names. If this is not provided, no header row is used
 	* @SheetName This is the optional name that appears in the first (and only) workbook tab.
+	* @ColumnFieldTypes This is the list of optional column field types.
+	* @ColumnFieldSizes This is the list of optional column field sizes.
 	* @Delimiters The list of delimiters used for the column list and column name arguments.
 	* @HeaderCSS Defines the limited CSS available for the header row (if a header row is used)
 	* @RowCSS Defines the limited CSS available for the non-header rows.
 	* @AltRowCSS Defines the limited CSS available for the alternate non-header rows. This style overwrites parts of the RowCSS
+	* @ChangeDecimalsCalledAmountToDollars Whether decimals with heading ending in "Amount" should be formatted as dollars
+	* @CellDateFormat Optional date format for date cells
+	* @CellTimeFormat Optional time format for time cells
+	* @CellTimestampeFormat Optional timestamp format for timestamp cells
+	* @CellDollarFormat Optional number format for "dollar" cells
 	*/
 	public void function WriteSingleExcel( required string FilePath, required query Query
 											, string ColumnList=ARGUMENTS.Query.ColumnList
 											, string ColumnNames="", string Sheetname="Sheet 1"
+											, string ColumnFieldTypes="", string ColumnFieldSizes=""
+											, boolean ChangeDecimalsCalledAmountToDollars="false"
+											, string CellDateFormat="", string CellTimeFormat="", string CellTimestampeFormat="", string CellDollarFormat=""
 											, string Delimiters=",", string HeaderCSS="", string RowCSS="", string AltRowCSS=""){
 			
 			
@@ -1084,6 +1351,13 @@ component {
 				FilePath = ARGUMENTS.FilePath,
 				Sheets = LOCAL.Sheet,
 				Delimiters = ARGUMENTS.Delimiters,
+				ColumnFieldTypes = ARGUMENTS.ColumnFieldTypes,
+				ColumnFieldSizes = ARGUMENTS.ColumnFieldSizes,
+				ChangeDecimalsCalledAmountToDollars = ARGUMENTS.ChangeDecimalsCalledAmountToDollars,
+				CellDateFormat = ARGUMENTS.CellDateFormat,
+				CellTimeFormat = ARGUMENTS.CellTimeFormat,
+				CellTimestampFormat = ARGUMENTS.CellTimestampFormat,
+				CellDollarFormat = ARGUMENTS.CellDollarFormat,
 				HeaderCSS = ARGUMENTS.HeaderCSS,
 				RowCSS = ARGUMENTS.RowCSS,
 				AltRowCSS = ARGUMENTS.AltRowCSS
@@ -1102,11 +1376,11 @@ component {
 	*/
 	public struct function GetNewSheetStruct( ){
 
-		LOCAL.result = {Query = "",ColumnList="",ColumnNames="",SheetName="" };
+		LOCAL.result = {Query = "",ColumnList="",ColumnNames="",ColumnFieldTypes="",ColumnFieldSizes="",SheetName="" };
 		
-		for(LOCAL.prop in ARGUMENTS){
+		for(LOCAL.prop in ARGUMENTS[1]){
 			if( StructKeyExists( LOCAL.result, LOCAL.prop ) ){
-				LOCAL.result[prop] = ARGUMENTS[prop];
+				LOCAL.result[LOCAL.prop] = ARGUMENTS[1][LOCAL.prop];
 			}
 		}
 	
@@ -1133,6 +1407,10 @@ component {
 			LOCAL.Row = ARGUMENTS.Sheet.GetRow(
 				JavaCast( "int", LOCAL.RowIndex )
 				);
+			// SJ2019: if spreadsheet is empty then GetRow returns undefined and LOCAL.Row won't exist
+			if ( !structKeyExists( LOCAL, "Row" ) ){
+				return -1;
+			}
 
 			LOCAL.hasCells = false;
 			for( local.colIndex = ARGUMENTS.ColEnd; local.colIndex GTE ARGUMENTS.ColStart; local.colIndex -= 1){
@@ -1144,8 +1422,8 @@ component {
 				if (StructKeyExists( LOCAL, "Cell" )){
 					
 					//4.2 getCellType is deprecated
-					LOCAL.CellType = LOCAL.Cell.GetCellType();
-					if ( LOCAL.Cell.getCellType()  neq LOCAL.CellType.BLANK ){
+					LOCAL.CellType = LOCAL.Cell.getCellType();
+					if ( LOCAL.Cell.getCellType() neq LOCAL.CellType.BLANK ){
 						LOCAL.hasCells = true;
 					}
 					
