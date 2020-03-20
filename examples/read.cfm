@@ -59,7 +59,7 @@
 
 		<table border="1">
 
-			<cfset colList = ArrayToList(objSheet.Query.getColumnList())>
+			<cfset colList = ArrayToList(objSheet.Query.getColumnNames())>
 			<tr>
 			<cfloop list="#colList#" index="col">
 			<th><cfoutput>#col#</cfoutput></th>

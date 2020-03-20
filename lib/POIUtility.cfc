@@ -581,7 +581,7 @@ component {
 							// Get the type of data in this cell.
 
 							//4.2 getCellType is deprecated
-							LOCAL.CellType = LOCAL.Cell.GetCellType();
+							//LOCAL.CellType = LOCAL.Cell.GetCellType();
 
 							// Get the value of the cell based on the data type. The thing
 							// to worry about here is cell forumlas and cell dates. Formulas
@@ -590,7 +590,7 @@ component {
 							// just grab dates as floats and formulas I will try to grab as
 							// numeric values.
 
-							if (LOCAL.CellType EQ LOCAL.CellType.NUMERIC) {
+						    if ( LOCAL.Cell.getCellType().ToString() eq "NUMERIC" ){
 
 								// Get numeric cell data. This could be a standard number,
 								// could also be a date value. I am going to leave it up to
@@ -608,11 +608,10 @@ component {
 									LOCAL.CellValue = JavaCast( "bigdecimal", LOCAL.CellValue );
 								}
 
-							} else if (LOCAL.CellType EQ LOCAL.CellType.STRING){
-
+						    } else if(LOCAL.Cell.getCellType().ToString() eq "STRING" ){
 								LOCAL.CellValue = LOCAL.Cell.GetStringCellValue();
 
-							} else if (LOCAL.CellType EQ LOCAL.CellType.FORMULA){
+							  } else if (LOCAL.Cell.getCellType().ToString() eq "FORMULA" ){
 
 								// Since most forumlas deal with numbers, I am going to try
 								// to grab the value as a number. If that throws an error, I
@@ -637,11 +636,11 @@ component {
 					 				}
 								}
 
-							} else if (LOCAL.CellType EQ LOCAL.CellType.BLANK){
+							} else if (LOCAL.Cell.getCellType().ToString() eq "BLANK" ){
 
 								LOCAL.CellValue = "";
 
-							} else if (LOCAL.CellType EQ LOCAL.CellType.BOOLEAN){
+							} else if (LOCAL.Cell.getCellType().ToString() eq "BOOLEAN" ){
 
 								LOCAL.CellValue = LOCAL.Cell.GetBooleanCellValue();
 
@@ -831,7 +830,7 @@ component {
 	* output false
 	*/
 	public void function WriteExcelSheet(required any WorkBook, required any CSSRule, required any Query,
-		                                string ColumnList=ARGUMENTS.Query.ColumnList,
+		                                string ColumnList=ARGUMENTS.Query.getColumnNames(),
 		                                string ColumnNames="",
 		                                string ColumnFieldTypes="",
 		                                string ColumnFieldSizes="",
@@ -1338,7 +1337,7 @@ component {
 	* @CellDollarFormat Optional number format for "dollar" cells
 	*/
 	public void function WriteSingleExcel( required string FilePath, required query Query
-											, string ColumnList=ARGUMENTS.Query.ColumnList
+											, string ColumnList=ARGUMENTS.Query.getColumnNames()
 											, string ColumnNames="", string Sheetname="Sheet 1"
 											, string ColumnFieldTypes="", string ColumnFieldSizes=""
 											, boolean ChangeDecimalsCalledAmountToDollars="false"
@@ -1428,8 +1427,7 @@ component {
 				if (StructKeyExists( LOCAL, "Cell" )){
 
 					//4.2 getCellType is deprecated
-					LOCAL.CellType = LOCAL.Cell.getCellType();
-					if ( LOCAL.Cell.getCellType() neq LOCAL.CellType.BLANK ){
+					if ( LOCAL.Cell.getCellType().ToString() neq "BLANK" ){
 						LOCAL.hasCells = true;
 					}
 
