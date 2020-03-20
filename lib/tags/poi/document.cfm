@@ -69,7 +69,7 @@
 		<cfset VARIABLES.loadPaths = ArrayNew(1)>
 
 		<cfset VARIABLES.isXLSX = true>
-		
+
 		<cfset VARIABLES.loadPaths[1] = replace( "#VARIABLES.poiPath#apache/poi-4-0-1.jar","\","/","all")>
 		<cfset VARIABLES.loadPaths[2] = replace( "#VARIABLES.poiPath#apache/poi-ooxml-4-0-1.jar","\","/","all")>
 		<cfset VARIABLES.loadPaths[3] = replace( "#VARIABLES.poiPath#apache/lib/commons-collections4-4.2.jar","\","/","all")>
@@ -81,22 +81,46 @@
 		<cfset VARIABLES.workbookFactoryClass  = "org.apache.poi.ss.usermodel.WorkbookFactory">
 		<cfset VARIABLES.cellRegionClass       = "org.apache.poi.ss.util.CellRangeAddress">
 
+		<!--- file or template attributes will override createXLSX attrribute --->
+		<cfif Len(ATTRIBUTES.File) or Len(ATTRIBUTES.Template)>
+			<cfif Len(ATTRIBUTES.File) >
+				<cfset VARIABLES.fileExtension = ListLast(ATTRIBUTES.File,".")>
+				<cfif ! ListFindNoCase("xls,xlsx", VARIABLES.fileExtension )>
+					<cfthrow type="POIUtilityException" message="Invalid extension type #VARIABLES.fileExtension# for #ATTRIBUTES.File#" >
+				</cfif>
+			</cfif>
+			<cfif Len(ATTRIBUTES.template) >
+				<cfset VARIABLES.fileExtension = ListLast(ATTRIBUTES.template,".")>
+				<cfif ! ListFindNoCase("xls,xlsx", VARIABLES.fileExtension )>
+					<cfthrow type="POIUtilityException" message="Invalid extension type #VARIABLES.fileExtension# for #ATTRIBUTES.template#" >
+				</cfif>
+			</cfif>
+			<cfif Len(ATTRIBUTES.File) and Len(ATTRIBUTES.Template)>
+				<cfif ListLast(ATTRIBUTES.FilePath,".") neq ListLast(ATTRIBUTES.template,".")>
+					<cfthrow type="POIUtilityException" message="File extension does not match template extension" >
+				</cfif>
+			</cfif>
+			<cfset ATTRIBUTES.createXLSX = ( lcase(VARIABLES.FileExtension) eq "xlsx" )>
+			<cfset VARIABLES.isXLSX = ATTRIBUTES.createXLSX>
+		</cfif>
+
+
 	    <cfif ATTRIBUTES.createXLSX>
-			
-			
+
+
 			<cfset VARIABLES.DataFormatClass       = "org.apache.poi.xssf.usermodel.XSSFDataFormat">
 			<cfset VARIABLES.formulaEvaluatorClass = "org.apache.poi.xssf.usermodel.XSSFFormulaEvaluator">
-					
+
 		<cfelse>
 
 			<cfset VARIABLES.isXLSX = false>
-			
-			
+
+
 			<cfset VARIABLES.DataFormatClass       = "org.apache.poi.hssf.usermodel.HSSFDataFormat">
 			<cfset VARIABLES.formulaEvaluatorClass = "org.apache.poi.hssf.usermodel.HSSFFormulaEvaluator">
-			
+
 		</cfif>
-		
+
 
 		<!--- Make sure that we have the proper attributes. --->
 		<cfif NOT (
@@ -123,7 +147,7 @@
 			to see if we are creating a totally new workbook, or if we want
 			to use an existing template.
 			Use the generic method of WorkBookFactory to create the appropriate type of document--->
-		
+
 		<cfif Len( ATTRIBUTES.Template )>
 
 
@@ -250,9 +274,11 @@
 			<cftry>
 				<cfif ATTRIBUTES.createXLSX >
 					<cfset VARIABLES.formulaEvaluator = VARIABLES.WorkBook.getCreationHelper().createFormulaEvaluator()>
-					<cfset VARIABLES.formulaEvaluator.evaluateAll()>
+					<!---<cfset VARIABLES.formulaEvaluator.evaluateAll()>--->
+					<cfset VARIABLES.formulaEvaluator.evaluateAllFormulaCells(VARIABLES.Workbook)>
 				<cfelse>
-					<cfset VARIABLES.formulaEvaluator = VARIABLES.javaLoader.create("#VARIABLES.formulaEvaluatorClass#").init()>
+					<!---><cfset VARIABLES.formulaEvaluator = VARIABLES.javaLoader.create("#VARIABLES.formulaEvaluatorClass#").init()>--->
+					<cfset VARIABLES.formulaEvaluator = VARIABLES.javaLoader.create("#VARIABLES.formulaEvaluatorClass#")>
 					<cfset VARIABLES.formulaEvaluator.evaluateAllFormulaCells(VARIABLES.WorkBook)>
 				</cfif>
 

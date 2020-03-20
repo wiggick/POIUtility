@@ -13,7 +13,7 @@
 *   @output false
 *
 */
-component  {
+component accessors=true output=false  {
 
    property struct CSS;
    property struct CSSCache;
@@ -34,6 +34,7 @@ component  {
    property any    regionUtil;
    property struct verticalAlignments;
    property any    workbook;
+   property boolean isXLSX;
 
 
 

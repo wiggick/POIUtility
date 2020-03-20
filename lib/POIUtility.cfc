@@ -27,13 +27,13 @@
 	*     CellDateFormat, CellTimeFormat, CellTimestampFormat, CellDollarFormat
 	*   Now formats date values as Excel dates
 	*   Optionally allows decimals to be formatted as dollar amounts
-	* 
+	*
 	*  01/22/2020 Steve Johnson (SJ2019)
 	*   Now handles column names that aren't valid CF variables
 	*   Fixed bug related to specifying SheetIndex
 	*   Can now detect if a blank spreadsheet is passed in
 	*   More accurately treats exponential numbers as big decimals
-	* 
+	*
 	*  04/09/2019 Chris Wigginton
 	* 	WOW Really? over 12 years since an update :-)
 	*   Read and Write both XLS and XLSX
@@ -73,11 +73,11 @@ component {
 	* @hint Returns an initialized POI Utility instance.
 	* @output false
 	*/
-	public any function Init(){
+	public any function Init(boolean isXLSX = true){
 
 		VARIABLES.poiPath =  GetDirectoryFromPath ( GetCurrentTemplatePath() ) & "tags/poi/";
 		VARIABLES.loadPaths = [];
-		VARIABLES.isXLSX = true;
+		VARIABLES.isXLSX = ARGUMENTS.isXLSX;
 		VARIABLES.loadPaths[1] = replace( "#VARIABLES.poiPath#apache/poi-4-0-1.jar","\","/","all");
 		VARIABLES.loadPaths[2] = replace( "#VARIABLES.poiPath#apache/poi-ooxml-4-0-1.jar","\","/","all");
 		VARIABLES.loadPaths[3] = replace( "#VARIABLES.poiPath#apache/lib/commons-collections4-4.2.jar","\","/","all");
@@ -99,7 +99,7 @@ component {
 	    VARIABLES.XLSClasses = {
 	    	formulaEvaluatorClass = "org.apache.poi.hssf.usermodel.HSSFFormulaEvaluator"
 		};
-		
+
 		VARIABLES.javaLoader = createObject("component", "lib.tags.poi.javaloader.JavaLoader").init(VARIABLES.loadPaths);
 
 		//Common to both XLS and XLSX
@@ -124,7 +124,7 @@ component {
 
 	/**
 	* @hint Create or return appropriate POI engine which would have a correctly initialized CSSRule for the given type
-	* @type Determines how the Workbook is created, read is read/close, create only creates the workbook 
+	* @type Determines how the Workbook is created, read is read/close, create only creates the workbook
 	*/
 	public any function GetPOIWorkBookObjects( required string FilePath, string type="read", boolean createCSSRule= false ){
 
@@ -138,35 +138,36 @@ component {
 				throw( type="POIUtilityException", message="Invalid extension type #local.fileExtension# for #ARGUMENTS.FilePath#");
 		}
 
-		LOCAL.isXLSX = ( lcase(local.FileExtension) eq "xlsx" );
+		VARIABLES.isXLSX = ( lcase(local.FileExtension) eq "xlsx" );
+
 
 		if( ARGUMENTS.type eq "read" ){
-			
+
 
 			LOCAL.FileInputStream = CreateObject( "java", "java.io.FileInputStream" ).Init(
 			JavaCast( "string", ARGUMENTS.FilePath )
 			);
-		
+
 			LOCAL.WorkBook = VARIABLES.WorkBookFactory.Create( LOCAL.FileInputStream );
 
 			LOCAL.FileInputStream.Close();
 
 		}else{
 			//writing we handle the fileOutput stream later
-			LOCAL.WorkBook = VARIABLES.WorkBookFactory.Create( JavaCast( "boolean",LOCAL.isXLSX ) );		
+			LOCAL.WorkBook = VARIABLES.WorkBookFactory.Create( JavaCast( "boolean",VARIABLES.isXLSX ) );
 		}
-		
+
 		// Now that we have crated the Excel file system,
 		// and read in the sheet data, we can close the
 		// input file stream so that it is not locked.
 		//LOCAL.FileInputStream.Close();
 		if( ARGUMENTS.createCSSRule ){
-			LOCAL.CSSRule = CreateObject( "component", "lib.tags.poi.CSSRule" ).Init( isXLSX =  LOCAL.isXLSX , javaLoader = VARIABLES.javaLoader, WorkBook = LOCAL.WorkBook );
+			LOCAL.CSSRule = CreateObject( "component", "lib.tags.poi.CSSRule" ).Init( isXLSX =  VARIABLES.isXLSX , javaLoader = VARIABLES.javaLoader, WorkBook = LOCAL.WorkBook );
 			LOCAL.result =  {WorkBook = LOCAL.Workbook, CSSRule = LOCAL.CssRule };
 		}else{
 			LOCAL.result = { WorkBook = LOCAL.Workbook };
 		}
-		
+
 		return LOCAL.result;
 	}
 
@@ -201,7 +202,7 @@ component {
 			}
 			if(  StructKeyExists(ARGUMENTS,"DataRowStart") AND Arguments.HeaderRowStart GT Arguments.DataRowStart ){
 				throw(type="POIUtility.rangeException", message="Header row cannot be after data row");
-			}				
+			}
 		}else{
 			ARGUMENTS.HeaderRowStart = 1;
 		}
@@ -239,18 +240,18 @@ component {
 			}
 		}
 
-		
+
 		if( StructKeyExists( ARGUMENTS,"ColumnStart" ) ){
 				ARGUMENTS.ColumnStart -= 1;
 		}else{
 			ARGUMENTS.ColumnStart = 0;
 		}
-		
+
 		LOCAL.WBObjects = GetPOIWorkBookObjects( FilePath = ARGUMENTS.FilePath, type="read" );
-		
+
 		// Check to see if we are returning an array of sheets OR just
 		// a given sheet.
-		
+
 		if (ARGUMENTS.SheetIndex GTE 0){
 
 			// SJ2019: if specifying a SheetIndex it expects "ARGUMENTS.WorkBook" which didn't actually exist
@@ -267,9 +268,9 @@ component {
 				ColumnsToRead       = ARGUMENTS.ColumnsToRead,
 				ColumnStart       = ARGUMENTS.ColumnStart,
 				HeaderRowStart    = ARGUMENTS.HeaderRowStart,
-				DataRowStart      = ARGUMENTS.DataRowStart	
+				DataRowStart      = ARGUMENTS.DataRowStart
 				);
-			
+
 		} else {
 
 			// No specific sheet was requested. We are going to return an array
@@ -286,7 +287,7 @@ component {
 				){
 
 				// Add the sheet information.
-				
+
 				ArrayAppend(
 					LOCAL.Sheets,
 					ReadExcelSheet(
@@ -297,13 +298,13 @@ component {
 						ColumnsToRead       = ARGUMENTS.ColumnsToRead,
 						ColumnStart       = ARGUMENTS.ColumnStart,
 						HeaderRowStart    = ARGUMENTS.HeaderRowStart,
-						DataRowStart      = ARGUMENTS.DataRowStart	
+						DataRowStart      = ARGUMENTS.DataRowStart
 						)
-					);					
+					);
 			}
 
 		}
-			
+
 		// Return the array of sheets.
 		return( LOCAL.Sheets );
 
@@ -315,14 +316,14 @@ component {
 	* @SheetIndex This is the index of the sheet within the passed in workbook. This is a ZERO-based index (coming from a Java object).
 	* @HasHeaderRow Flags the Excel files has using the first data row a header column. If so, this column will be excluded from the resultant query.
 	* @SheetIndex
-	* @RowsToRead 
-	* @ColumnsToRead 
-	* @ColumnStart 
+	* @RowsToRead
+	* @ColumnsToRead
+	* @ColumnStart
 	* @HeaderRowStart
-	* @DataRowStart 
+	* @DataRowStart
 	* @output false
 	*/
-	private struct function ReadExcelSheet( required any WorkBook, boolean HasHeaderRow = false, 
+	private struct function ReadExcelSheet( required any WorkBook, boolean HasHeaderRow = false,
 		numeric SheetIndex,
 		numeric RowsToRead,
 		numeric ColumnsToRead,
@@ -363,18 +364,18 @@ component {
 			JavaCast( "int", ARGUMENTS.SheetIndex )
 		);
 
-		//This can give a false value if a given row used to have data.  
+		//This can give a false value if a given row used to have data.
 		LOCAL.SheetData.MaxRowCount = LOCAL.Sheet.getLastRowNum();
-		
+
 		LOCAL.startRow = ( ARGUMENTS.HasHeaderRow  ? ARGUMENTS.HeaderRowStart:ARGUMENTS.DataRowStart );
 		LOCAL.lastRow = ( ARGUMENTS.RowsToRead GT 0 AND (ARGUMENTS.DataRowStart + ARGUMENTS.RowsToRead ) LT LOCAL.Sheet.GetLastRowNum() ? ARGUMENTS.RowsToRead + ARGUMENTS.DataRowStart : LOCAL.Sheet.GetLastRowNum() );
-		
+
 		for (
 			LOCAL.RowIndex = LOCAL.startRow;
 			LOCAL.RowIndex LTE LOCAL.lastRow;
 			LOCAL.RowIndex = (LOCAL.RowIndex + 1)
 			){
-				
+
 			// Get a reference to the current row.
 			LOCAL.Row = LOCAL.Sheet.GetRow(
 				JavaCast( "int", LOCAL.RowIndex )
@@ -405,13 +406,13 @@ component {
 			}
 
 		}
-		
+
 		LOCAL.startCol = ARGUMENTS.ColumnStart;
 		LOCAL.LastCol = ( ARGUMENTS.ColumnsToRead GT 0 AND (LOCAL.startCol + ARGUMENTS.ColumnsToRead ) LT LOCAL.SheetData.MaxColumnCount ? LOCAL.startCol + ARGUMENTS.ColumnsToRead : LOCAL.SheetData.MaxColumnCount );
-	
+
 		//Do a hard check on our range we intend to load
-		
-		LOCAL.lastRow = findLastRowWithData( Sheet=LOCAL.Sheet, 
+
+		LOCAL.lastRow = findLastRowWithData( Sheet=LOCAL.Sheet,
 		RowStart=LOCAL.startRow, RowEnd=LOCAL.lastRow,
 		ColStart=LOCAL.startCol, ColEnd = LOCAL.LastCol);
 
@@ -448,12 +449,15 @@ component {
 						LOCAL.ColumnIndex LT LOCAL.LastCol ;
 						LOCAL.ColumnIndex = (LOCAL.ColumnIndex + 1)
 						){
-						
+
 						LOCAL.ColumnName = LOCAL.Row.GetCell( JavaCast( "int", LOCAL.ColumnIndex ) ).GetStringCellValue();
 						// SJ2019: the QueryAddColumn would fail if column name had spaces or "#" - to be safe strip all but alphanumeric values
-						LOCAL.ColumnName = replace(LOCAL.ColumnName,"##","Num","all");
-						LOCAL.ColumnName = replace(LOCAL.ColumnName,"&","And","all");
-						LOCAL.ColumnName = reReplaceNoCase(LOCAL.ColumnName,"[^a-z0-9]","","all");
+						//cwigginton don't have to do this if engine is Lucee, though only checked space and hash'
+						if(!StructKeyExistS(SERVER,"productName") or SERVER.productName neq 'Lucee'){
+							LOCAL.ColumnName = replace(LOCAL.ColumnName,"##","Num","all");
+							LOCAL.ColumnName = replace(LOCAL.ColumnName,"&","And","all");
+							LOCAL.ColumnName = reReplaceNoCase(LOCAL.ColumnName,"[^a-z0-9]","_","all");
+						}
 						ArrayAppend(LOCAL.SheetData.COLUMNNAMES, LOCAL.ColumnName );
 						QueryAddColumn(
 							LOCAL.SheetData.Query,
@@ -473,7 +477,7 @@ component {
 						LOCAL.ColumnIndex LT LOCAL.lastCol;
 						LOCAL.ColumnIndex = (LOCAL.ColumnIndex + 1)
 						){
-						
+
 						LOCAL.ColumnName = "column#LOCAL.ColumnIndex + LOCAL.startCol#";
 						ArrayAppend(LOCAL.SheetData.COLUMNNAMES, LOCAL.ColumnName );
 						QueryAddColumn(
@@ -509,13 +513,13 @@ component {
 					LOCAL.ColumnIndex LT LOCAL.lastCol;
 					LOCAL.ColumnIndex =  (LOCAL.ColumnIndex + 1)
 					){
-					
+
 					// Check to see if we might be dealing with a header row.
 					// This will be true if we are in the first row AND if
 					// the user had flagged the header row usage.
 					if ( ARGUMENTS.HasHeaderRow AND LOCAL.RowIndex EQ  ( ARGUMENTS.HeaderRowStart  ) ){
 
-						
+
 						// Try to get a header column name (it might throw
 						// an error). We want to take that cell value and
 						// add it to the array of header values that we will
@@ -523,13 +527,13 @@ component {
 						try {
 
 							// Add the cell value to the column names.
-												
+
 							ArrayAppend(
 								LOCAL.SheetData.ColumnNames,
-								LOCAL.Row.GetCell( 
+								LOCAL.Row.GetCell(
 								JavaCast( "int", LOCAL.ColumnIndex ) ).GetStringCellValue()
 								);
-							
+
 						} catch (any ErrorHeader){
 
 							// There was an error grabbing the text of the
@@ -585,7 +589,7 @@ component {
 							// this demo, I am not going to worry about that at all. I will
 							// just grab dates as floats and formulas I will try to grab as
 							// numeric values.
-					
+
 							if (LOCAL.CellType EQ LOCAL.CellType.NUMERIC) {
 
 								// Get numeric cell data. This could be a standard number,
@@ -595,9 +599,9 @@ component {
 
 								// SJ2019: Excel sometimes converts large decimals to exponential format
 								// which loses some of the precision. This is especially bad when it's
-								// actually going to be used as a string in the application - you might 
+								// actually going to be used as a string in the application - you might
 								// be expecting "3891910034001" but Excel will change it to "3.89191E+12".
-								// The below JavaCast changes exponential numbers into big decimals. The 
+								// The below JavaCast changes exponential numbers into big decimals. The
 								// calling program can then format it as a string, a number, or as an
 								// exponential number.
 								if (reFind("[0-9]\.[0-9]+E\+[0-9]+",LOCAL.CellValue)) {
@@ -660,7 +664,7 @@ component {
 							// for ColdFusion standards. That is why I am adding 1 to the
 							// cell index.
 
-							//We need to subtract the local.startCol from the index 
+							//We need to subtract the local.startCol from the index
 							LOCAL.adjColumnIndex = LOCAL.ColumnIndex + 1 - Local.startCol;
 							try{
 								LOCAL.SheetData.Query[ LOCAL.SheetData.COLUMNNAMES[ LOCAL.adjColumnIndex ] ][ LOCAL.SheetData.Query.RecordCount  ] = JavaCast( "string", LOCAL.CellValue );
@@ -672,10 +676,10 @@ component {
 
 					}
 
-				} 
-				
+				}
+
 			}
-			
+
 		}
 
 		// Return the sheet object that contains all the Excel data.
@@ -698,8 +702,8 @@ component {
 	* @output false
 	*/
 	public void function WriteExcel(required string FilePath, required any Sheets,
-		boolean ChangeDecimalsCalledAmountToDollars="false", string CellDateFormat="", 
-		string CellTimeFormat="", string CellTimestampeFormat="", string CellDollarFormat="",
+		boolean ChangeDecimalsCalledAmountToDollars="false", string CellDateFormat="",
+		string CellTimeFormat="", string CellTimestampFormat="", string CellDollarFormat="",
 		string Delimiters=",", string HeaderCSS="", string RowCSS="", string AltRowCSS="" ){
 
 		//TODO Javaloader and create workbook
@@ -835,9 +839,9 @@ component {
 		                                boolean ChangeDecimalsCalledAmountToDollars="false",
 		                                string CellDateFormat="",
 		                                string CellTimeFormat="",
-		                                string CellTimestampeFormat="", 
+		                                string CellTimestampeFormat="",
 		                                string CellDollarFormat="",
-		                                string Delimiters=",", 
+		                                string Delimiters=",",
 		                                string HeaderCSS="", string RowCSS="", string AltRowCSS=""){
 
 			// Set up data type map so that we can map each column name to
@@ -871,7 +875,7 @@ component {
 				ARGUMENTS.Workbook,
 				LOCAL.HeaderStyle
 				);
- 
+
  			LOCAL.RowStyle = ARGUMENTS.WorkBook.CreateCellStyle();
 			LOCAL.RowCSS = ARGUMENTS.CSSRule.AddCSS(LOCAL.Classes,ARGUMENTS.RowCSS );
 			LOCAL.RowStyle = ARGUMENTS.CSSRule.ApplyToCellStyle(
@@ -883,7 +887,7 @@ component {
 			LOCAL.AltRowStyle = ARGUMENTS.WorkBook.CreateCellStyle();
 			LOCAL.AltRowCSS = ARGUMENTS.CSSRule.AddCSS(LOCAL.Classes,ARGUMENTS.AltRowCSS );
 
-	
+
 			// Now, loop over alt row css and check for values. If there are not
 			// values (no length), then overwrite the alt row with the standard
 			// row. This is a round-about way of letting the alt row override
@@ -907,52 +911,52 @@ component {
 				LOCAL.AltRowStyle
 				);
 
-			
+
 			// SJ2020: create additional cell styles for dates
 			if (len(ARGUMENTS.CellDateFormat)) {
 				LOCAL.CellStyleDateFormat = ARGUMENTS.Workbook.getCreationHelper().createDataFormat().getFormat(ARGUMENTS.CellDateFormat);
 			} else {
 				LOCAL.CellStyleDateFormat = ARGUMENTS.Workbook.getCreationHelper().createDataFormat().getFormat("yyyy-MM-dd");
 			}
-			
+
 			LOCAL.RowStyleDate = ARGUMENTS.WorkBook.CreateCellStyle();
 			LOCAL.RowStyleDate.cloneStyleFrom(LOCAL.RowStyle);
 			LOCAL.RowStyleDate.setDataFormat(LOCAL.CellStyleDateFormat);
-			
+
 			LOCAL.AltRowStyleDate = ARGUMENTS.WorkBook.CreateCellStyle();
 			LOCAL.AltRowStyleDate.cloneStyleFrom(LOCAL.AltRowStyle);
 			LOCAL.AltRowStyleDate.setDataFormat(LOCAL.CellStyleDateFormat);
-			
+
 			// SJ2020: create additional cell styles for time
 			if (len(ARGUMENTS.CellTimeFormat)) {
 				LOCAL.CellStyleTimeFormat = ARGUMENTS.Workbook.getCreationHelper().createDataFormat().getFormat(ARGUMENTS.CellTimeFormat);
 			} else {
 				LOCAL.CellStyleTimeFormat = ARGUMENTS.Workbook.getCreationHelper().createDataFormat().getFormat("HH:mm:ss");
 			}
-			
+
 			LOCAL.RowStyleTime = ARGUMENTS.WorkBook.CreateCellStyle();
 			LOCAL.RowStyleTime.cloneStyleFrom(LOCAL.RowStyle);
 			LOCAL.RowStyleTime.setDataFormat(LOCAL.CellStyleTimeFormat);
-			
+
 			LOCAL.AltRowStyleTime = ARGUMENTS.WorkBook.CreateCellStyle();
 			LOCAL.AltRowStyleTime.cloneStyleFrom(LOCAL.AltRowStyle);
 			LOCAL.AltRowStyleTime.setDataFormat(LOCAL.CellStyleTimeFormat);
-			
+
 			// SJ2020: create additional cell styles for timestamp
 			if (len(ARGUMENTS.CellTimestampFormat)) {
 				LOCAL.CellStyleTimestampFormat = ARGUMENTS.Workbook.getCreationHelper().createDataFormat().getFormat(ARGUMENTS.CellTimestampFormat);
 			} else {
 				LOCAL.CellStyleTimestampFormat = ARGUMENTS.Workbook.getCreationHelper().createDataFormat().getFormat("yyyy-MM-dd HH:mm:ss");
 			}
-			
+
 			LOCAL.RowStyleTimestamp = ARGUMENTS.WorkBook.CreateCellStyle();
 			LOCAL.RowStyleTimestamp.cloneStyleFrom(LOCAL.RowStyle);
 			LOCAL.RowStyleTimestamp.setDataFormat(LOCAL.CellStyleTimestampFormat);
-			
+
 			LOCAL.AltRowStyleTimestamp = ARGUMENTS.WorkBook.CreateCellStyle();
 			LOCAL.AltRowStyleTimestamp.cloneStyleFrom(LOCAL.AltRowStyle);
 			LOCAL.AltRowStyleTimestamp.setDataFormat(LOCAL.CellStyleTimestampFormat);
-			
+
 			// SJ2020: create additional cell styles for dollar amounts
 			if (len(ARGUMENTS.CellDollarFormat)) {
 				LOCAL.CellStyleDollarFormat = ARGUMENTS.Workbook.getCreationHelper().createDataFormat().getFormat(ARGUMENTS.CellDollarFormat);
@@ -963,7 +967,7 @@ component {
 			LOCAL.RowStyleDollar = ARGUMENTS.WorkBook.CreateCellStyle();
 			LOCAL.RowStyleDollar.cloneStyleFrom(LOCAL.RowStyle);
 			LOCAL.RowStyleDollar.setDataFormat(LOCAL.CellStyleDollarFormat);
-			
+
 			LOCAL.AltRowStyleDollar = ARGUMENTS.WorkBook.CreateCellStyle();
 			LOCAL.AltRowStyleDollar.cloneStyleFrom(LOCAL.AltRowStyle);
 			LOCAL.AltRowStyleDollar.setDataFormat(LOCAL.CellStyleDollarFormat);
@@ -1124,7 +1128,7 @@ component {
 					} else if (REFindNoCase( "varchar", LOCAL.DataMapValue )){
 						// check for varchar here so we can intercept "longvarchar" before the "long" numeric check
 						LOCAL.DataMapCast = "string";
-						
+
 					} else if (REFindNoCase( "long", LOCAL.DataMapValue )){
 
 						LOCAL.DataMapCast = "long";
@@ -1281,7 +1285,7 @@ component {
 
 						}
 
-					}				
+					}
 				}
 
 			}
@@ -1300,11 +1304,11 @@ component {
 					if (LOCAL.OverrideColumnSize == "auto" || LOCAL.ColumnFieldSizes[1] == "full auto") {
 						LOCAL.Sheet.autoSizeColumn(LOCAL.ColumnIndex - 1);
 					} else if(isValid("integer",LOCAL.OverrideColumnSize)) {
-						LOCAL.Sheet.setColumnWidth(LOCAL.ColumnIndex - 1, 
+						LOCAL.Sheet.setColumnWidth(LOCAL.ColumnIndex - 1,
 							256 * JavaCast( "int", LOCAL.OverrideColumnSize )
 						);
 					}
-				
+
 				}
 			}
 
@@ -1340,8 +1344,8 @@ component {
 											, boolean ChangeDecimalsCalledAmountToDollars="false"
 											, string CellDateFormat="", string CellTimeFormat="", string CellTimestampeFormat="", string CellDollarFormat=""
 											, string Delimiters=",", string HeaderCSS="", string RowCSS="", string AltRowCSS=""){
-			
-			
+
+
 
 			// Get a new sheet object.
 			LOCAL.Sheet = GetNewSheetStruct( ARGUMENTS );
@@ -1377,13 +1381,15 @@ component {
 	public struct function GetNewSheetStruct( ){
 
 		LOCAL.result = {Query = "",ColumnList="",ColumnNames="",ColumnFieldTypes="",ColumnFieldSizes="",SheetName="" };
-		
-		for(LOCAL.prop in ARGUMENTS[1]){
-			if( StructKeyExists( LOCAL.result, LOCAL.prop ) ){
-				LOCAL.result[LOCAL.prop] = ARGUMENTS[1][LOCAL.prop];
+
+		for( LOCAL.arg in ARGUMENTS){
+			for(LOCAL.prop in LOCAL.arg){
+				if( StructKeyExists( LOCAL.result, LOCAL.prop ) ){
+					LOCAL.result[LOCAL.prop] = LOCAL.arg[LOCAL.prop];
+				}
 			}
 		}
-	
+
 		return LOCAL.result;
 	}
 
@@ -1392,7 +1398,7 @@ component {
 		abort;
 	}
 
-	public numeric function findLastRowWithData(required any Sheet, 
+	public numeric function findLastRowWithData(required any Sheet,
 		required numeric RowStart, required numeric RowEnd,
 		required numeric ColStart, required numeric ColEnd ){
 
@@ -1420,20 +1426,20 @@ component {
 					JavaCast( "int", LOCAL.colIndex )
 					);
 				if (StructKeyExists( LOCAL, "Cell" )){
-					
+
 					//4.2 getCellType is deprecated
 					LOCAL.CellType = LOCAL.Cell.getCellType();
 					if ( LOCAL.Cell.getCellType() neq LOCAL.CellType.BLANK ){
 						LOCAL.hasCells = true;
 					}
-					
+
 
 				}
-				
-			}	
+
+			}
 			if ( LOCAL.hasCells ){
 				return local.rowIndex;
-			}	
+			}
 		}
 
 
