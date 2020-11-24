@@ -96,7 +96,7 @@
 				</cfif>
 			</cfif>
 			<cfif Len(ATTRIBUTES.File) and Len(ATTRIBUTES.Template)>
-				<cfif ListLast(ATTRIBUTES.FilePath,".") neq ListLast(ATTRIBUTES.template,".")>
+				<cfif ListLast(ATTRIBUTES.File,".") neq ListLast(ATTRIBUTES.template,".")>
 					<cfthrow type="POIUtilityException" message="File extension does not match template extension" >
 				</cfif>
 			</cfif>
