@@ -14,7 +14,7 @@ I've brought POIUtility and custom tags up to date to use the latest Apache POI 
 * Now Supports xlsx ( Just add an createXLSX="true" attribute in the document tag )
 * Revamped CSSRule.cfc to cfscript, added generic border style and color settings, added rowSpan, when used with colSpan, will merge regions.
 
-### Here is a color pattern test showing generation of both XLS and XLST
+### Here is a color pattern test showing generation of both XLS and XLSX
 <img src="https://github.com/wiggick/POIUtility.cfc/blob/master/docs/ugly_spreadsheet.PNG">
 
 ### Comments now supported
